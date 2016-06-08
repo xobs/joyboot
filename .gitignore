@@ -1,0 +1,9 @@
+*.bin
+*.elf
+*.symbol
+.map
+.obj/
+
+*.swp
+*.swo
+*~
