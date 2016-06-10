@@ -39,9 +39,13 @@ static void init_crt(void) {
 
 extern void __early_init(void);
 
+__attribute__ ((noreturn))
+extern void bootloader_main(void);
+
 __attribute__ ((section(".startup"), noreturn))
 void Reset_Handler(void) {
 
   init_crt();
   __early_init();
+  bootloader_main();
 }
