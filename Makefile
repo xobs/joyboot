@@ -24,7 +24,7 @@ endif
 DESTDIR ?= /usr
 PREFIX ?= $(DESTDIR)
 
-LDSCRIPT = KL02Z32-bl.ld
+LDSCRIPT = KW01-bl.ld
 DBG_CFLAGS = -ggdb -g -DDEBUG -Wall
 DBG_LFLAGS = -ggdb -g -Wall
 CFLAGS     = $(ADD_CFLAGS) $(PKG_CFLAGS) \
