@@ -1,3 +1,4 @@
+#include "palawan.h"
 #include "kl17.h"
 #include "kinetis_adc.h"
 
@@ -25,12 +26,6 @@
 #define PALAWAN_TX_VALUE_3_PAIR 5442
 #define PALAWAN_TX_VALUE_4 65483
 #define PALAWAN_TX_VALUE_4_PAIR 65127
-
-enum palawan_model {
-  palawan_unknown = 0,
-  palawan_tx = 1,
-  palawan_rx = 2,
-};
 
 static enum palawan_model _model;
 
@@ -166,15 +161,15 @@ static void radio_enable(void) {
     GPIOE->PCOR = (1 << 19);
 }
 
-static void assert_cs(void) {
+void spi_assert_cs(void) {
   GPIOD->PCOR = (1 << 0);
 }
 
-static void deassert_cs(void) {
+void spi_deassert_cs(void) {
   GPIOD->PSOR = (1 << 0);
 }
 
-static void spi_read_status(void) {
+void spi_read_status(void) {
   (void)SPI0->S;
 }
 
@@ -183,7 +178,7 @@ static void spi_read_status(void) {
  *
  * @notapi
  */
-static void spi_xmit_byte_sync(uint8_t byte) {
+void spi_xmit_byte_sync(uint8_t byte) {
   /* Send the byte */
   SPI0->DL = byte;
 
@@ -202,7 +197,7 @@ static void spi_xmit_byte_sync(uint8_t byte) {
  *
  * @notapi
  */
-static uint8_t spi_recv_byte_sync(void) {
+uint8_t spi_recv_byte_sync(void) {
   /* Send the byte */
   SPI0->DL = 0;
 
@@ -227,13 +222,13 @@ static uint8_t radio_read_register(uint8_t addr) {
   uint8_t val;
 
   spi_read_status();
-  assert_cs();
+  spi_assert_cs();
 
   spi_xmit_byte_sync(addr);
   spi_recv_byte_sync();
   val = spi_recv_byte_sync();
 
-  deassert_cs();
+  spi_deassert_cs();
 
   return val;
 }
@@ -249,7 +244,7 @@ static uint8_t radio_read_register(uint8_t addr) {
 static void radio_write_register(uint8_t addr, uint8_t val) {
 
   spi_read_status();
-  assert_cs();
+  spi_assert_cs();
   /* Send the address to write */
   spi_xmit_byte_sync(addr | 0x80);
 
@@ -257,7 +252,7 @@ static void radio_write_register(uint8_t addr, uint8_t val) {
   spi_xmit_byte_sync(val);
 
   (void)spi_recv_byte_sync();
-  deassert_cs();
+  spi_deassert_cs();
 }
 
 static void early_usleep(int usec) {
@@ -352,7 +347,7 @@ static void early_init_radio(void) {
   SPI0->C1 |= (SPIx_C1_SPE | SPIx_C1_MSTR);
 
   spi_read_status();
-  deassert_cs();
+  spi_deassert_cs();
 }
 
 /**
