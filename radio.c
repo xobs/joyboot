@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "kl17.h"
 #include "radio.h"
 #include "TransceiverReg.h"
 
@@ -363,9 +364,8 @@ static void radio_set_broadcast_address(KRadioDevice *radio, uint8_t address) {
   radio_set(radio, RADIO_BroadcastAddress, address);
 }
 
-static void radio_unload_packet(void) {
+void radioUnloadPacket(KRadioDevice *radio) {
 
-  KRadioDevice *radio = radioDevice;
   RadioPacket pkt;
   uint8_t reg, crc;
 
@@ -407,6 +407,14 @@ static void radio_unload_packet(void) {
                              payload);
 }
 
+void radioPoll(KRadioDevice *radio) {
+
+  if (!(GPIOC->PDIR & (1 << 4)))
+    return;
+
+  radioUnloadPacket(radio);
+}
+
 void radioStop(KRadioDevice *radio) {
   radio_set(radio, RADIO_OpMode, 0x80); // force into sleep mode immediately
 }
@@ -414,8 +422,6 @@ void radioStop(KRadioDevice *radio) {
 void radioStart(KRadioDevice *radio) {
 
   unsigned int reg;
-
-//  evtTableHook(orchard_events, rf_pkt_rdy, radio_unload_packet);
 
   reg = 0;
   while (reg < ARRAY_SIZE(default_registers)) {
@@ -453,16 +459,8 @@ void radioStart(KRadioDevice *radio) {
                                | OpMode_Receiver);
 }
 
-void radioSetDefaultHandler(KRadioDevice *radio,
-                            void (*handler)(uint8_t prot,
-                                            uint8_t src,
-                                            uint8_t dst,
-                                            uint8_t length,
-                                            const void *data)) {
-  radio->default_handler = handler;
-}
-
-void radioSetHandler(KRadioDevice *radio, uint8_t prot,
+void radioSetHandler(KRadioDevice *radio,
+                     uint8_t prot,
                      void (*handler)(uint8_t prot,
                                      uint8_t src,
                                      uint8_t dst,
@@ -478,12 +476,18 @@ void radioSetHandler(KRadioDevice *radio, uint8_t prot,
     }
   }
 
-  /* New handler */
-  osalDbgAssert(radio->num_handlers < MAX_PACKET_HANDLERS,
-                "Too many packet handler prots");
   radio->handlers[radio->num_handlers].prot    = prot;
   radio->handlers[radio->num_handlers].handler = handler;
   radio->num_handlers++;
+}
+
+void radioSetDefaultHandler(KRadioDevice *radio,
+                            void (*handler)(uint8_t prot,
+                                            uint8_t src,
+                                            uint8_t dst,
+                                            uint8_t length,
+                                            const void *data)) {
+  radio->default_handler = handler;
 }
 
 uint8_t radioRead(KRadioDevice *radio, uint8_t addr) {
@@ -557,30 +561,6 @@ void radioSetNetwork(KRadioDevice *radio, const uint8_t *id, uint8_t len) {
     radio_set(radio, RADIO_SyncValue1 + ptr, reg);
   }
 }
-
-/*
-static void radio_handle_interrupt(KRadioDevice *radio) {
-
-  if (radio->mode == mode_transmitting) {
-    osalSysLockFromISR();
-    osalThreadResumeI(&(radio)->thread, MSG_OK);
-    osalSysUnlockFromISR();
-  }
-  else if (radio->mode == mode_receiving) {
-    chSysLockFromISR();
-    chEvtBroadcastI(&rf_pkt_rdy);
-    chSysUnlockFromISR();
-  }
-}
-
-void radioInterrupt(EXTDriver *extp, expchannel_t channel) {
-
-  (void)extp;
-  (void)channel;
-
-  radio_handle_interrupt(radioDevice);
-}
-*/
 
 void radioSetAddress(KRadioDevice *radio, uint8_t addr) {
 

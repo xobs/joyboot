@@ -2,6 +2,7 @@
 #define __ORCHARD_RADIO_H__
 
 #include <stddef.h>
+#include <stdint.h>
 
 struct _KRadioDevice;
 typedef struct _KRadioDevice KRadioDevice;
@@ -30,6 +31,7 @@ extern KRadioDevice KRADIO1;
 
 void radioStart(KRadioDevice *radio);
 void radioStop(KRadioDevice *radio);
+void radioPoll(KRadioDevice *radio);
 uint8_t radioRead(KRadioDevice *radio, uint8_t addr);
 void radioWrite(KRadioDevice *radio, uint8_t addr, uint8_t val);
 int radioDump(KRadioDevice *radio, uint8_t addr, void *bfr, int count);
