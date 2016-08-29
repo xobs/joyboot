@@ -3,7 +3,7 @@ PACKAGE    = $(firstword $(subst -, , $(DIRNAME)))
 LIBS       =
 VERSION    = v1.0
 ADD_CFLAGS =
-ADD_LFLAGS =
+ADD_LFLAGS = lib/*.a
 EXTRA_DIST =
 
 PREFIX     := arm-none-eabi-
