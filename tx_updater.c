@@ -73,7 +73,6 @@ invalid_response:
 
 static int get_one_page(KRadioDevice *radio, uint8_t data[1024], int pagenum) {
 
-  int i = 0;
   struct firmware_request request = {
     .type             = MURMUR_REQUEST,
     .offset           = (pagenum * 1024),
@@ -84,10 +83,12 @@ static int get_one_page(KRadioDevice *radio, uint8_t data[1024], int pagenum) {
   /* Send a request for the data, and wait for it to come back */
   radioSend(radio, 0, REQUEST_FIRMWARE_DATA, sizeof(request), &request);
 
+  /*
   while (i < 1024) {
     uint32_t addr = (pagenum * 1024) + i;
 
   }
+  */
 
   return 0;
 }
