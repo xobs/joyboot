@@ -1233,6 +1233,86 @@ typedef struct
 #define FTFx_FDPROT 0x40020017
 
 
+// PORT stuff
+#define PORTA_GPCLR *(volatile uint32_t *)0x40049080
+#define PORTA_GPCHR *(volatile uint32_t *)0x40049084
+#define PORTA_ISFR *(volatile uint32_t *)0x400490a0
+#define PORTB_GPCLR *(volatile uint32_t *)0x4004a080
+#define PORTB_GPCHR *(volatile uint32_t *)0x4004a084
+#define PORTB_ISFR *(volatile uint32_t *)0x4004a0a0
+#define PORTC_GPCLR *(volatile uint32_t *)0x4004b080
+#define PORTC_GPCHR *(volatile uint32_t *)0x4004b084
+#define PORTC_ISFR *(volatile uint32_t *)0x4004b0a0
+#define PORTD_GPCLR *(volatile uint32_t *)0x4004c080
+#define PORTD_GPCHR *(volatile uint32_t *)0x4004c084
+#define PORTD_ISFR *(volatile uint32_t *)0x4004c0a0
+#define PORTE_GPCLR *(volatile uint32_t *)0x4004d080
+#define PORTE_GPCHR *(volatile uint32_t *)0x4004d084
+#define PORTE_ISFR *(volatile uint32_t *)0x4004d0a0
+
+// GPIO stuff
+#define GPIOA_PDOR *(volatile uint32_t *)0x400ff000
+#define GPIOA_PSOR *(volatile uint32_t *)0x400ff004
+#define GPIOA_PCOR *(volatile uint32_t *)0x400ff008
+#define GPIOA_PTOR *(volatile uint32_t *)0x400ff00c
+#define GPIOA_PDIR *(volatile uint32_t *)0x400ff010
+#define GPIOA_PDDR *(volatile uint32_t *)0x400ff014
+#define GPIOB_PDOR *(volatile uint32_t *)0x400ff040
+#define GPIOB_PSOR *(volatile uint32_t *)0x400ff044
+#define GPIOB_PCOR *(volatile uint32_t *)0x400ff048
+#define GPIOB_PTOR *(volatile uint32_t *)0x400ff04c
+#define GPIOB_PDIR *(volatile uint32_t *)0x400ff050
+#define GPIOB_PDDR *(volatile uint32_t *)0x400ff054
+#define GPIOC_PDOR *(volatile uint32_t *)0x400ff080
+#define GPIOC_PSOR *(volatile uint32_t *)0x400ff084
+#define GPIOC_PCOR *(volatile uint32_t *)0x400ff088
+#define GPIOC_PTOR *(volatile uint32_t *)0x400ff08c
+#define GPIOC_PDIR *(volatile uint32_t *)0x400ff090
+#define GPIOC_PDDR *(volatile uint32_t *)0x400ff094
+#define GPIOD_PDOR *(volatile uint32_t *)0x400ff0c0
+#define GPIOD_PSOR *(volatile uint32_t *)0x400ff0c4
+#define GPIOD_PCOR *(volatile uint32_t *)0x400ff0c8
+#define GPIOD_PTOR *(volatile uint32_t *)0x400ff0cc
+#define GPIOD_PDIR *(volatile uint32_t *)0x400ff0d0
+#define GPIOD_PDDR *(volatile uint32_t *)0x400ff0d4
+#define GPIOE_PDOR *(volatile uint32_t *)0x400ff100
+#define GPIOE_PSOR *(volatile uint32_t *)0x400ff104
+#define GPIOE_PCOR *(volatile uint32_t *)0x400ff108
+#define GPIOE_PTOR *(volatile uint32_t *)0x400ff10c
+#define GPIOE_PDIR *(volatile uint32_t *)0x400ff110
+#define GPIOE_PDDR *(volatile uint32_t *)0x400ff114
+#define FGPIOA_PDOR *(volatile uint32_t *)0xf8000000
+#define FGPIOA_PSOR *(volatile uint32_t *)0xf8000004
+#define FGPIOA_PCOR *(volatile uint32_t *)0xf8000008
+#define FGPIOA_PTOR *(volatile uint32_t *)0xf800000c
+#define FGPIOA_PDIR *(volatile uint32_t *)0xf8000010
+#define FGPIOA_PDDR *(volatile uint32_t *)0xf8000014
+#define FGPIOB_PDOR *(volatile uint32_t *)0xf8000040
+#define FGPIOB_PSOR *(volatile uint32_t *)0xf8000044
+#define FGPIOB_PCOR *(volatile uint32_t *)0xf8000048
+#define FGPIOB_PTOR *(volatile uint32_t *)0xf800004c
+#define FGPIOB_PDIR *(volatile uint32_t *)0xf8000050
+#define FGPIOB_PDDR *(volatile uint32_t *)0xf8000054
+#define FGPIOC_PDOR *(volatile uint32_t *)0xf8000080
+#define FGPIOC_PSOR *(volatile uint32_t *)0xf8000084
+#define FGPIOC_PCOR *(volatile uint32_t *)0xf8000088
+#define FGPIOC_PTOR *(volatile uint32_t *)0xf800008c
+#define FGPIOC_PDIR *(volatile uint32_t *)0xf8000090
+#define FGPIOC_PDDR *(volatile uint32_t *)0xf8000094
+#define FGPIOD_PDOR *(volatile uint32_t *)0xf80000c0
+#define FGPIOD_PSOR *(volatile uint32_t *)0xf80000c4
+#define FGPIOD_PCOR *(volatile uint32_t *)0xf80000c8
+#define FGPIOD_PTOR *(volatile uint32_t *)0xf80000cc
+#define FGPIOD_PDIR *(volatile uint32_t *)0xf80000d0
+#define FGPIOD_PDDR *(volatile uint32_t *)0xf80000d4
+#define FGPIOE_PDOR *(volatile uint32_t *)0xf8000100
+#define FGPIOE_PSOR *(volatile uint32_t *)0xf8000104
+#define FGPIOE_PCOR *(volatile uint32_t *)0xf8000108
+#define FGPIOE_PTOR *(volatile uint32_t *)0xf800010c
+#define FGPIOE_PDIR *(volatile uint32_t *)0xf8000110
+#define FGPIOE_PDDR *(volatile uint32_t *)0xf8000114
+
+
 // Chapter 23: Watchdog Timer (WDOG)
 #define WDOG_STCTRLH            *(volatile uint16_t *)0x40052000 // Watchdog Status and Control Register High
 #define WDOG_STCTRLH_DISTESTWDOG    (uint16_t)0x4000        // Allows the WDOG's functional test mode to be disabled permanently.
