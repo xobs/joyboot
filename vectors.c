@@ -32,6 +32,7 @@ typedef struct {
 } vectors_t;
 
 void _unhandled_exception(void) {
+  asm("bkpt #0");
   while (true) {
   }
 }
