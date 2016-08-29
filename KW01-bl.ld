@@ -57,6 +57,7 @@ SECTIONS
         . = ALIGN(4);
         _sdtext = .;
         *(.text*)
+	*(.ramtext*)
         *(.rodata*)
         *(.data*)
         . = ALIGN(4);
