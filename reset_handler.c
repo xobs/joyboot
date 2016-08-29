@@ -15,6 +15,7 @@ extern uint32_t *_vectors;
 /* A place for the vector table to live while in RAM */
 static uint32_t ram_vectors[64] __attribute__ ((aligned (1024)));
 
+__attribute__ ((section(".startup")))
 static void init_crt(void) {
 
   /* Relocate data and text sections to RAM */
