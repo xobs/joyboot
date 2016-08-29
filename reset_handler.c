@@ -28,7 +28,7 @@ static void init_crt(void) {
   while (dest < &_ebss) *dest++ = 0;
 
   /* Copy IVT to RAM */
-  src = (uint32_t *) &_vectors[0];
+  src = (uint32_t *) &_vectors;
   dest = &ram_vectors[0];
   while (dest <= &ram_vectors[63])
     *dest++ = *src++;
