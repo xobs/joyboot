@@ -191,9 +191,6 @@ void usbPhyAttach(struct USBPHY *phy) {
   portbFastISR = usb_phy_fast_isr;
 #endif
 
-  /* Clear the interrupt lines, just in case there are pending IRQs.*/
-  PORTA->ISFR = 0xFFFFFFFF;
-
   /* Set both lines to input */
   writel(readl(phy->usbdpDAddr) & ~phy->usbdpMask, phy->usbdpDAddr);
   writel(readl(phy->usbdnDAddr) & ~phy->usbdnMask, phy->usbdnDAddr);
