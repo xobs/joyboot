@@ -1,5 +1,5 @@
-.section .ramtext /* Can also run out of .section .ramtext */
-.section .text    /* Can also run out of .section .ramtext */
+.section .ramtext /* Can also run out of .section .text */
+//.section .text    /* Can also run out of .section .ramtext */
 
 .cpu    cortex-m0plus
 .fpu    softvfp
@@ -20,7 +20,7 @@
    * Both functions take the following struct as their first parameter:
    *
    *  static struct USBPHY {
-   *    // USB D- line descriptor
+   *    // USB D- line descriptor 
    *    uint32_t dpIAddr; // GPIO "sample-whole-bank" address
    *    uint32_t dpSAddr; // GPIO "set-pin-level" address
    *    uint32_t dpCAddr; // GPIO "clear-pin-level" address
@@ -38,7 +38,7 @@
    *    uint32_t dpMask;  // Mask of GPIO pin in S/C/D/I addresses
    *    uint32_t dnMask;
    *
-   *    // Private data can follow
+   *    // Optional extra data follows
    * };
    */
 #endif
@@ -173,27 +173,10 @@ usb_phy_read__se0:
   add rone, rval                    // Combine D+ and D-.
   beq usb_phy_read__se0             // Exit if SE0 condition (both are 0).
 
-  /* Pre-load some registers, to make it quicker to start reading packets.*/
-  mov rsample, #0                   // Reset the sample byte value.
-  mov rcounter, #0b11
-  mov runstuff, rcounter            // Load 0b11 into unstuff reg, as the header
-                                    // ends with the pattern KK, which starts
-                                    // a run of two.
-
-  ldr rcounter, [rusbphy, #dpIAddr] // Cache the address of the D+ input bank
-  mov rdpiaddr, rcounter            // to save one cycle.
-  ldr rcounter, [rusbphy, #dnIAddr] // Cache the address of the D- input bank
-  mov rdniaddr, rcounter            // to save another cycle.
-  ldr rcounter, [rusbphy, #dpShift] // Cache the D+ shift, too.
-  mov rdpshift, rcounter
-
-  mov rcounter, #0                  // Reset the "bits" counter.
-  mov rone, #1                      // Actually load the value '1' into the reg.
-
   // The loop is 4 cycles on a failure.  One
   // pulse is 32 cycles.  Therefore, loop up
   // to 8 times before giving up.
-.rept 8
+.rept 7
   ldr rval, [rreg]                  // Sample USBDP
   and rval, rmash                   // Mask off the interesting bit
   cmp rval, rlastval                // Wait for it to change
@@ -207,13 +190,13 @@ usb_phy_read__sync_wait:
 
   // Wait for the end-of-header sync pulse, which is when the value
   // repeats itself.  This is the "KK" in the KJKJKJKK training sequence.
-.rept 6
+.rept 7
   ldr rval, [rreg]                    // Sample USBDP
   and rval, rmash                     // Mask off the interesting bit
   cmp rlastval, rval
   beq usb_phy_read__start_reading_usb
   mov rlastval, rval
-  bl usb_phy_wait_22_cycles
+  bl usb_phy_wait_27_cycles
 .endr
   b usb_phy_read__sync_timeout
 
@@ -222,18 +205,38 @@ usb_phy_read__sync_wait:
    */
 usb_phy_read__start_reading_usb:
 
+  /* Clear out the register shift-chain */
+  mov rsample, #0                   // Reset the sample byte value.
+  mov rcounter, #0                  // Reset the "bits" counter.
+
+  mov rval, #0b11
+  mov runstuff, rval                // Load 0b11 into unstuff reg, as the header
+                                    // ends with the pattern KK, which starts
+                                    // a run of two.
+
+  mov rone, #1                      // Actually load the value '1' into the reg.
+  // ?
+
   /* Adjust rlastval so that it's in the correct position -- we skip doing
      this above since we're only interested in the value changing, not in
      what the value is.  However, we're now interested in what the value
      is, so we now deal with shifts instead of masks, and always mask by
      #1.
    */
+  mov rval, rlastval
   ldr rmash, [rusbphy, #dpShift]
-  ldr rscratch, [rusbphy, #dnMask]
   ror rval, rmash
-  and rval, rone                      // AND the last value by 1, to get bit.
-  mov rlastval, rval                  // Store shifted value in hi register.
-  // 5
+  and rval, rone
+  mov rlastval, rval
+  // 6
+
+  ldr rreg, [rusbphy, #dpIAddr]       // Cache the address of the D+ input bank
+  mov rdpiaddr, rreg                  // to save one cycle.
+  ldr rreg, [rusbphy, #dnIAddr]       // Cache the address of the D- input bank
+  mov rdniaddr, rreg                  // to save another cycle.
+  ldr rreg, [rusbphy, #dpShift]       // Cache the D+ shift, too.
+  mov rdpshift, rreg
+  // 9
 
 usb_phy_read__get_usb_bit:
   mov rval, rdpiaddr                  // Get the address of the D+ input bank.
@@ -269,14 +272,15 @@ usb_phy_read__get_usb_bit:
    * If the byte continues, check for SE0.
    */
   add rcounter, rone                  // Increment the total-bit counter.
-  mov rmash, #7                       // Prepare to mask by 0x7
-  tst rcounter, rmash                 // Perform the mask
+  mov rscratch, #7                    // Prepare to mask by 0x7
+  tst rcounter, rscratch              // Perform the mask
   beq usb_phy_read__advance_byte      // If the result is 0, advance the byte.
   // 4 (or 5, if branch taken)
 
   // The result is NOT 0, so see if it's an SE0.
 usb_phy_read__check_se0:
   // Check for SE0
+  ldr rscratch, [sp, #rsDnMask]
   and rreg, rscratch
   add rreg, rval                      // An end-of-frame is indicated by two
                                       // frames of SE0.  If this is the case,
@@ -300,11 +304,10 @@ usb_phy_read__advance_byte:
 usb_phy_read__check_unstuff:
   mov rreg, runstuff
   mov rval, #0b111111                 // Unstuff mask
-//  and rreg, rval
-//  cmp rreg, rval
+  and rreg, rval
+  cmp rreg, rval
 
   /* Loop again */
-  b usb_phy_read__get_usb_bit
   bne usb_phy_read__get_usb_bit
   // 2 (if branch taken, 1 if unstuffing needs to happen)
 
@@ -320,9 +323,9 @@ usb_unstuff:
   // 1
 
   /* Invert the last value, since a false 0 was added to the stream */
-  mov rreg, rlastval                  // Read the current last val into a lo reg
+  mov rreg, rlastval                  // Read the current last val into a lo reg.
   mvn rreg, rreg                      // Negate the value.
-  and rreg, rone                      // Mask it with 0b1
+  and rreg, rreg, rone                // Mask it with 0b1
   mov rlastval, rreg                  // Save it back into a lo reg.
   // 4
 
