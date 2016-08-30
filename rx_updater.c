@@ -1,3 +1,5 @@
+#include <string.h>
+
 #include "usbphy.h"
 #include "usbmac.h"
 #include "usblink.h"
@@ -25,7 +27,6 @@ void set_usb_config_num(struct USBLink *link, int configNum)
 {
   ;
 }
-
 
 static const uint8_t class_descriptor[] = {
   0x05, 0x01, /* USAGE_PAGE (Generic Desktop)           */
@@ -63,7 +64,7 @@ static const uint8_t class_descriptor[] = {
 };
 
 static const struct usb_device_descriptor device_descriptor = {
-  .bLength = sizeof(struct usb_device_descriptor),
+  .bLength = 18,//sizeof(struct usb_device_descriptor),
   .bDescriptorType = DT_DEVICE,       /* DEVICE */
   .bcdUSB = 0x0200,           /* USB 2.0 */
   .bDeviceClass = 0x00,
@@ -73,27 +74,28 @@ static const struct usb_device_descriptor device_descriptor = {
   .idVendor = 0x1bcf,
   .idProduct = 0x05ce,
   .bcdDevice = 0xa014,        /* Device release 1.0 */
-  .iManufacturer = 0x00,      /* No manufacturer string */
-  .iProduct = 0x00,           /* Product name in string #2 */
-  .iSerialNumber = 0x00,      /* No serial number */
+  .iManufacturer = 0x02,      /* No manufacturer string */
+  .iProduct = 0x01,           /* Product name in string #2 */
+  .iSerialNumber = 0x03,      /* No serial number */
   .bNumConfigurations = 0x01,
 };
 
 static const struct usb_configuration_descriptor configuration_descriptor = {
-  .bLength = sizeof(struct usb_configuration_descriptor),
+  .bLength = 9,//sizeof(struct usb_configuration_descriptor),
   .bDescriptorType = DT_CONFIGURATION,
-  .wTotalLength = sizeof(struct usb_configuration_descriptor)
+  .wTotalLength = (9 + 9 + 9 + 7)/*
+                  (sizeof(struct usb_configuration_descriptor)
                 + sizeof(struct usb_interface_descriptor)
                 + sizeof(struct usb_hid_descriptor)
-                + sizeof(struct usb_endpoint_descriptor),
+                + sizeof(struct usb_endpoint_descriptor)*/,
   .bNumInterfaces = 1,
   .bConfigurationValue = 1,
   .iConfiguration = 0,
-  .bmAttributes = 0xa0,       /* Remote wakeup supported */
+  .bmAttributes = 0x80,       /* Remote wakeup supported */
   .bMaxPower = 100/2,         /* 100 mA (in 2-mA units) */
   .data = {
     /* struct usb_interface_descriptor { */
-    /*  uint8_t bLength;            */ sizeof(struct usb_interface_descriptor),
+    /*  uint8_t bLength;            */ 9,
     /*  uint8_t bDescriptorType;    */ DT_INTERFACE,
     /*  uint8_t bInterfaceNumber;   */ 0,
     /*  uint8_t bAlternateSetting;  */ 0,
@@ -105,7 +107,7 @@ static const struct usb_configuration_descriptor configuration_descriptor = {
     /* }*/
 
     /* struct usb_hid_descriptor {        */
-    /*  uint8_t  bLength;                 */ sizeof(struct usb_hid_descriptor),
+    /*  uint8_t  bLength;                 */ 9,
     /*  uint8_t  bDescriptorType;         */ DT_HID,
     /*  uint16_t bcdHID;                  */ 0x00, 0x01,
     /*  uint8_t  bCountryCode;            */ 0,
@@ -116,7 +118,7 @@ static const struct usb_configuration_descriptor configuration_descriptor = {
     /* }                                  */
 
     /* struct usb_endpoint_descriptor { */
-    /*  uint8_t  bLength;             */ sizeof(struct usb_endpoint_descriptor),
+    /*  uint8_t  bLength;             */ 7,
     /*  uint8_t  bDescriptorType;     */ DT_ENDPOINT,
     /*  uint8_t  bEndpointAddress;    */ 0x81,  /* EP1 (IN) */
     /*  uint8_t  bmAttributes;        */ 3,     /* Interrupt */
@@ -138,25 +140,55 @@ static const struct usb_configuration_descriptor configuration_descriptor = {
   */
 };
 
+#define USB_STR_BUF_LEN 64
+
+static int send_string_descriptor(const char *str, const void **data)
+{
+  static uint8_t str_buf[USB_STR_BUF_LEN];
+  int len;
+  int max_len;
+  uint8_t *str_offset = str_buf;
+
+  len = strlen(str);
+  max_len = (sizeof(str_buf) / 2) - 2;
+
+  if (len > max_len)
+    len = max_len;
+
+  *str_offset++ = (len * 2) + 2;  // Two bytes for length count
+  *str_offset++ = DT_STRING;      // Sending a string descriptor
+
+  while (len--) {
+    *str_offset++ = *str++;
+    *str_offset++ = 0;
+  }
+
+  *data = str_buf;
+  return str_buf[0];
+}
+
 static int get_string_descriptor(struct USBLink *link,
                                  uint32_t num,
                                  const void **data)
 {
 
   static const uint8_t en_us[] = {0x04, DT_STRING, 0x09, 0x04};
-  static const uint8_t str[] = {0x06, DT_STRING, 0x65, 0x00, 0x66, 0x00};
 
   (void)link;
 
-  switch (num) {
-  case 0:
+  if (num == 0) {
     *data = en_us;
     return sizeof(en_us);
-
-  case 1:
-    *data = str;
-    return sizeof(str);
   }
+
+  if (num == 1)
+    return send_string_descriptor("Product is cool", data);
+
+  if (num == 2)
+    return send_string_descriptor("Company is cool", data);
+
+  if (num == 3)
+    return send_string_descriptor("Serial numbers are cool", data);
 
   return 0;
 }
@@ -225,6 +257,7 @@ struct USBLink hid_link = {
 };
 
 
+int count;
 void VectorB8(void)
 {
   usbCaptureI(&defaultUsbPhy);
@@ -237,7 +270,6 @@ int done;
 
 int updateRx(void)
 {
-
   /* Unlock PORTA and PORTB */
   SIM->SCGC5 |= SIM_SCGC5_PORTA | SIM_SCGC5_PORTB;
 
@@ -253,7 +285,7 @@ int updateRx(void)
     for (i = 0; i < 1000; i++) {
       int j;
       for (j = 0; j < 77; j++) {
-        asm("nop");
+        asm("");
       }
     }
   }
