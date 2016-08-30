@@ -137,11 +137,6 @@ enum palawan_model palawanModel(void) {
     else if ((resistance_min < PALAWAN_TX_VALUE_4_PAIR)
           && (resistance_max > PALAWAN_TX_VALUE_4_PAIR))
       _model = palawan_tx;
-//
-//    if (_model == palawan_rx)
-//      runtime_board_name = "Kosagi Palawan (Rx)";
-//    else if (_model == palawan_tx)
-//      runtime_board_name = "Kosagi Palawan (Tx)";
   }
 
     return _model;
@@ -291,8 +286,8 @@ static int radio_power_cycle(void) {
 
   radio_enable();
 
-  /* Cheesy msleep(5).*/
-  early_msleep(5);
+  /* Cheesy msleep(10).*/
+  early_msleep(10);
 
   return 1;
 }
@@ -357,9 +352,25 @@ static void early_init_radio(void) {
  *
  * @notapi
  */
+
+/* This optimization fix causes it to read DIOMAPPING2 three times, and
+ * for reasons unknown, this actually causes it to stick.
+ * Maybe it's a race condition, I'm not really sure.  But if you don't
+ * do the readback afterwards, then the clock gets stuck at 1 MHz rather
+ * than 8 MHz, and bad things happen.
+ */
+#define DIOVAL2_OPTIMIZATION_FIX
 static void radio_configure_clko(uint8_t osc_div) {
+#ifdef DIOVAL2_OPTIMIZATION_FIX
+  uint8_t dioval2 = radio_read_register(RADIO_REG_DIOMAPPING2);
+  radio_write_register(RADIO_REG_DIOMAPPING2, (dioval2 & ~7) | osc_div);
+  dioval2 = radio_read_register(RADIO_REG_DIOMAPPING2);
+  radio_write_register(RADIO_REG_DIOMAPPING2, (dioval2 & ~7) | osc_div);
+  (void)radio_read_register(RADIO_REG_DIOMAPPING2);
+#else
   radio_write_register(RADIO_REG_DIOMAPPING2,
       (radio_read_register(RADIO_REG_DIOMAPPING2) & ~7) | osc_div);
+#endif
 }
 
 /**
