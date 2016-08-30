@@ -41,9 +41,14 @@ struct USBPHY {
 
   uint8_t read_queue_head;
   uint8_t read_queue_tail;
-  uint16_t padding;
 
   /* pkt_size is cached in read_queue[x][11] */
+  /* read_queue is aligned such that its first byte is on a word boundary.
+   * This is because the first byte of every packet is a PID, which is
+   * immediately discarded.  This leaves the remainder of the packet
+   * word-aligned.
+   */
+  uint8_t padding[1];
   uint8_t read_queue[PHY_READ_QUEUE_SIZE][12];
 } __attribute__((packed, aligned(4)));
 
