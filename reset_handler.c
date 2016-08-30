@@ -2,12 +2,12 @@
 #include "kl17.h"
 
 /* Values exported by the linker */
-extern unsigned long _eflash;
-extern unsigned long _sdtext;
-extern unsigned long _edtext;
-extern unsigned long _sbss;
-extern unsigned long _ebss;
-extern unsigned long __main_stack_end__;
+extern uint32_t _eflash;
+extern uint32_t _sdtext;
+extern uint32_t _edtext;
+extern uint32_t _sbss;
+extern uint32_t _ebss;
+extern uint32_t __main_stack_end__;
 
 /* Pointer to the Cortex vector table (located at offset 0) */
 extern uint32_t *_vectors;
