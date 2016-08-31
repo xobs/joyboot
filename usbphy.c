@@ -72,6 +72,7 @@ out:
 int usbPhyWritePrepare(struct USBPHY *phy, const void *buffer, int size) {
 
   phy->queued_data = buffer;
+  __DMB();
   phy->queued_size = size;
   return 0;
 }

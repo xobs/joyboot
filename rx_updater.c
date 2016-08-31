@@ -5,6 +5,8 @@
 #include "usblink.h"
 #include "kl17.h"
 
+#define BUFFER_SIZE 8
+
 static struct USBPHY defaultUsbPhy = {
   /* PTB0 */
   .usbdnIAddr = (uint32_t)&FGPIOB->PDIR,
@@ -25,11 +27,12 @@ static struct USBPHY defaultUsbPhy = {
 
 void set_usb_config_num(struct USBLink *link, int configNum)
 {
+  (void)link;
+  (void)configNum;
   ;
 }
 
-static const uint8_t class_descriptor[] = {
-#if 0
+static const uint8_t kbd_class_descriptor[] = {
   0x05, 0x01, /* USAGE_PAGE (Generic Desktop)           */
   0x09, 0x06, /* USAGE (Keyboard)                       */
   0xa1, 0x01, /* COLLECTION (Application)               */
@@ -62,31 +65,35 @@ static const uint8_t class_descriptor[] = {
   0x29, 0x65, /*   USAGE_MAXIMUM (Keyboard Application) */
   0x81, 0x00, /*   INPUT (Data,Ary,Abs)                 */
   0xc0        /* END_COLLECTION                         */
-#endif
+};
+
+static const uint8_t class_descriptor[] = {
   0x06, 0x00, 0xFF,   // Usage Page = 0xFF00 (Vendor Defined Page 1)
   0x09, 0x01,         // Usage (Vendor Usage 1)
   0xA1, 0x01,         // Collection (Application)
-    0x19, 0x01,       //      Usage Minimum 
-    0x29, 0x40,       //      Usage Maximum 	//64 input usages total (0x01 to 0x40)
     0x15, 0x00,       //      Logical Minimum (data bytes in the report may have minimum value = 0x00)
     0x26, 0xFF, 0x00, //      Logical Maximum (data bytes in the report may have maximum value = 0x00FF = unsigned 255)
     0x75, 0x08,       //      Report Size: 8-bit field size
-    0x95, 0x01,       //      Report Count: Make one 8-bit field (the next time the parser hits an "Input", "Output", or "Feature" item)
-    0x81, 0x00,       //      Input (Data, Array, Abs): Instantiates input packet fields based on the above report size, count, logical min/max, and usage.
-    0x19, 0x01,       //      Usage Minimum 
-    0x29, 0x40,       //      Usage Maximum 	// one output usages total (0x01 to 0x01)
+    0x95, BUFFER_SIZE,//      Report Count: Make eight 8-bit fields (the next time the parser hits an "Input", "Output", or "Feature" item)
+    0x09, 0x01,       //      Usage: Undefined
+    0x81, 0x02,       //      Input (Data, Array, Abs): Instantiates input packet fields based on the above report size, count, logical min/max, and usage.
+    0x95, BUFFER_SIZE,//      Report Count: Make eight 8-bit fields (the next time the parser hits an "Input", "Output", or "Feature" item)
+    0x09, 0x01,       //      Usage: Undefined
     0x91, 0x00,       //      Output (Data, Array, Abs): Instantiates
-										  //      output packet fields.  Uses same report size
-										  //		  and count as "Input" fields, since nothing
-										  //		  new/different was specified to the parser
-										  //		  since the "Input" item.
-	0xC0 // End Collection
+                      //      output packet fields.  Uses same report size
+                      //      and count as "Input" fields, since nothing
+                      //      new/different was specified to the parser
+                      //      since the "Input" item.
+    0x95, BUFFER_SIZE,//      Report Count: Make eight 8-bit fields (the next time the parser hits an "Input", "Output", or "Feature" item)
+    0x09, 0x01,       //      Usage: Undefined
+    0xB1, 0x02,       //      Feature: Data
+  0xC0 // End Collection
 };
 
 static const struct usb_device_descriptor device_descriptor = {
   .bLength = 18,//sizeof(struct usb_device_descriptor),
   .bDescriptorType = DT_DEVICE,       /* DEVICE */
-  .bcdUSB = 0x0111,           /* USB 2.0 */
+  .bcdUSB = 0x0111,           /* USB 1.11 */
   .bDeviceClass = 0x00,
   .bDeviceSubClass = 0x00,
   .bDeviceProtocol = 0x00,
@@ -103,14 +110,14 @@ static const struct usb_device_descriptor device_descriptor = {
 static const struct usb_configuration_descriptor configuration_descriptor = {
   .bLength = 9,//sizeof(struct usb_configuration_descriptor),
   .bDescriptorType = DT_CONFIGURATION,
-  .wTotalLength = (9 + 9 + 9 + 7 + 7)/*
+  .wTotalLength = (9  +  9 + 9 + 7  +  9 + 9 + 7 + 7)/*
                   (sizeof(struct usb_configuration_descriptor)
                 + sizeof(struct usb_interface_descriptor)
                 + sizeof(struct usb_hid_descriptor)
                 + sizeof(struct usb_endpoint_descriptor)*/,
-  .bNumInterfaces = 1,
+  .bNumInterfaces = 2,
   .bConfigurationValue = 1,
-  .iConfiguration = 0,
+  .iConfiguration = 5,
   .bmAttributes = 0xa0,       /* Remote wakeup supported */
   .bMaxPower = 100/2,         /* 100 mA (in 2-mA units) */
   .data = {
@@ -119,11 +126,43 @@ static const struct usb_configuration_descriptor configuration_descriptor = {
     /*  uint8_t bDescriptorType;    */ DT_INTERFACE,
     /*  uint8_t bInterfaceNumber;   */ 0,
     /*  uint8_t bAlternateSetting;  */ 0,
+    /*  uint8_t bNumEndpoints;      */ 1, /* One extra EPs */
+    /*  uint8_t bInterfaceClass;    */ 3, /* HID class */
+    /*  uint8_t bInterfaceSubclass; */ 1, /* Boot Device subclass */
+    /*  uint8_t bInterfaceProtocol; */ 1, /* 1 == keyboard, 2 == mouse */
+    /*  uint8_t iInterface;         */ 6, /* String index #6 */
+    /* }*/
+
+    /* struct usb_hid_descriptor {        */
+    /*  uint8_t  bLength;                 */ 9,
+    /*  uint8_t  bDescriptorType;         */ DT_HID,
+    /*  uint16_t bcdHID;                  */ 0x11, 0x01,
+    /*  uint8_t  bCountryCode;            */ 0,
+    /*  uint8_t  bNumDescriptors;         */ 1, /* We have only one REPORT */
+    /*  uint8_t  bReportDescriptorType;   */ DT_HID_REPORT,
+    /*  uint16_t wReportDescriptorLength; */ sizeof(kbd_class_descriptor),
+                                             sizeof(kbd_class_descriptor) >> 8,
+    /* }                                  */
+
+    /* struct usb_endpoint_descriptor { */
+    /*  uint8_t  bLength;             */ 7,
+    /*  uint8_t  bDescriptorType;     */ DT_ENDPOINT,
+    /*  uint8_t  bEndpointAddress;    */ 0x81,  /* EP1 (IN) */
+    /*  uint8_t  bmAttributes;        */ 3,     /* Interrupt */
+    /*  uint16_t wMaxPacketSize;      */ 0x08, 0x00,
+    /*  uint8_t  bInterval;           */ 6, /* Every 1 ms */
+    /* }                              */
+
+    /* struct usb_interface_descriptor { */
+    /*  uint8_t bLength;            */ 9,
+    /*  uint8_t bDescriptorType;    */ DT_INTERFACE,
+    /*  uint8_t bInterfaceNumber;   */ 1,
+    /*  uint8_t bAlternateSetting;  */ 0,
     /*  uint8_t bNumEndpoints;      */ 2, /* Two extra EPs */
     /*  uint8_t bInterfaceClass;    */ 3, /* HID class */
     /*  uint8_t bInterfaceSubclass; */ 0, /* Boot Device subclass */
     /*  uint8_t bInterfaceProtocol; */ 0, /* 1 == keyboard, 2 == mouse */
-    /*  uint8_t iInterface;         */ 0,
+    /*  uint8_t iInterface;         */ 4, /* String index #4 */
     /* }*/
 
     /* struct usb_hid_descriptor {        */
@@ -140,46 +179,35 @@ static const struct usb_configuration_descriptor configuration_descriptor = {
     /* struct usb_endpoint_descriptor { */
     /*  uint8_t  bLength;             */ 7,
     /*  uint8_t  bDescriptorType;     */ DT_ENDPOINT,
-    /*  uint8_t  bEndpointAddress;    */ 0x81,  /* EP1 (IN) */
+    /*  uint8_t  bEndpointAddress;    */ 0x82,  /* EP1 (IN) */
     /*  uint8_t  bmAttributes;        */ 3,     /* Interrupt */
     /*  uint16_t wMaxPacketSize;      */ 0x08, 0x00,
-    /*  uint8_t  bInterval;           */ 1, /* Every 1 ms */
+    /*  uint8_t  bInterval;           */ 6, /* Every 1 ms */
     /* }                              */
 
     /* struct usb_endpoint_descriptor { */
     /*  uint8_t  bLength;             */ 7,
     /*  uint8_t  bDescriptorType;     */ DT_ENDPOINT,
-    /*  uint8_t  bEndpointAddress;    */ 0x01,  /* EP1 (OUT) */
+    /*  uint8_t  bEndpointAddress;    */ 0x02,  /* EP1 (OUT) */
     /*  uint8_t  bmAttributes;        */ 3,     /* Interrupt */
     /*  uint16_t wMaxPacketSize;      */ 0x08, 0x00,
-    /*  uint8_t  bInterval;           */ 1, /* Every 1 ms */
+    /*  uint8_t  bInterval;           */ 6, /* Every 1 ms */
     /* }                              */
   },
-
-  /*
-         0x09 DT_CONFIGURATION 0x3B 0x00 0x02 0x01 0x00 0xA0 0x17
-
-         0x09 DT_INTERFACE 0x00 0x00 0x01 0x03 0x01 0x01 0x00
-         0x09 DT_HID 0x00 0x01 0x00 0x01 0x22 0x41 0x00
-         0x07 DT_ENDPOINT 0x81 0x03 0x08 0x00 0x0A
-
-         0x09 DT_INTERFACE 0x01 0x00 0x01 0x03 0x01 0x02 0x00
-         0x09 DT_HID 0x00 0x01 0x00 0x01 0x22 0xB3 0x00
-         0x07 DT_ENDPOINT 0x82 0x03 0x08 0x00 0x0A
-  */
 };
 
 #define USB_STR_BUF_LEN 64
 
+uint32_t str_buf_storage[USB_STR_BUF_LEN / sizeof(uint32_t)];
 static int send_string_descriptor(const char *str, const void **data)
 {
-  static uint8_t str_buf[USB_STR_BUF_LEN];
   int len;
   int max_len;
+  uint8_t *str_buf = (uint8_t *)str_buf_storage;
   uint8_t *str_offset = str_buf;
 
   len = strlen(str);
-  max_len = (sizeof(str_buf) / 2) - 2;
+  max_len = (USB_STR_BUF_LEN / 2) - 2;
 
   if (len > max_len)
     len = max_len;
@@ -193,6 +221,8 @@ static int send_string_descriptor(const char *str, const void **data)
   }
 
   *data = str_buf;
+
+  // Return the size, which is stored in the first byte of the output data.
   return str_buf[0];
 }
 
@@ -218,6 +248,15 @@ static int get_string_descriptor(struct USBLink *link,
 
   if (num == 3)
     return send_string_descriptor("Serial numbers are cool", data);
+
+  if (num == 4)
+    return send_string_descriptor("Update", data);
+
+  if (num == 5)
+    return send_string_descriptor("Update Configuration", data);
+
+  if (num == 6)
+    return send_string_descriptor("Virtual Keyboard", data);
 
   return 0;
 }
@@ -276,13 +315,47 @@ static int get_default_descriptor(struct USBLink *link,
   return 0;
 }
 
+uint32_t rx_buffer[BUFFER_SIZE / sizeof(uint32_t)];
+static void * get_usb_buffer(struct USBLink *link, uint8_t epNum)
+{
+  (void)link;
+  (void)epNum;
+
+  return rx_buffer;
+}
+
+static int received_data(struct USBLink *link,
+                         uint8_t epNum,
+                         uint32_t bytes,
+                         const void *data)
+{
+  (void)link;
+  (void)epNum;
+  (void)bytes;
+  (void)data;
+
+  return 0;
+}
+
+static int send_data_finished(struct USBLink *link, uint8_t epNum, const void *data)
+{
+  (void)link;
+  (void)epNum;
+  (void)data;
+
+  return 0;
+}
+
 struct USBLink hid_link = {
-  .getStringDescriptor = get_string_descriptor,
-  .getDeviceDescriptor = get_device_descriptor,
+  .getStringDescriptor        = get_string_descriptor,
+  .getDeviceDescriptor        = get_device_descriptor,
   .getConfigurationDescriptor = get_configuration_descriptor,
-  .getClassDescriptor = get_class_descriptor,
-  .getDescriptor = get_default_descriptor,
-  .setConfigNum = set_usb_config_num,
+  .getClassDescriptor         = get_class_descriptor,
+  .getDescriptor              = get_default_descriptor,
+  .setConfigNum               = set_usb_config_num,
+  .getBuffer                  = get_usb_buffer,
+  .sendData                   = send_data_finished,
+  .receiveData                = received_data,
 };
 
 

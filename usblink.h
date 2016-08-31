@@ -96,23 +96,48 @@ struct usb_hid_descriptor {
 struct USBLink;
 struct usb_mac_setup_packet;
 
-typedef int (*get_usb_descriptor_t)(struct USBLink *link,
+typedef int (*usb_get_descriptor_t)(struct USBLink *link,
                                     uint32_t type,
                                     const void **data);
-typedef int (*get_usb_descriptor_any_t)(struct USBLink *link,
+typedef int (*usb_get_descriptor_any_t)(struct USBLink *link,
                                         const struct usb_mac_setup_packet *setup,
                                         const void **data);                                    
-typedef void (*set_usb_config_num_t)(struct USBLink *link,
+/*
+ * Called when doing an OUT xfer (data to device) to get a buffer for
+ * the specified endpoint.
+ * It is up to the user to ensure the buffer is large enough.
+ */
+typedef void * (*usb_get_buffer_t)(struct USBLink *link, uint8_t epnum);
+
+/*
+ * When data is received (i.e. OUT EP), this function will be called.
+ */
+typedef int (*usb_data_in_t)(struct USBLink *link,
+                             uint8_t epnum,
+                             uint32_t bytes,
+                             const void *data);                                    
+
+/*
+ * When data is finished sending (i.e. IN EP), this function will be called.
+ */
+typedef int (*usb_data_out_t)(struct USBLink *link,
+                             uint8_t epnum,
+                             const void *data);                                    
+
+typedef void (*usb_set_config_num_t)(struct USBLink *link,
                                      int configNum);
 
 struct USBLink {
-  get_usb_descriptor_t getStringDescriptor;
-  get_usb_descriptor_t getDeviceDescriptor;
-  get_usb_descriptor_t getConfigurationDescriptor;
-  get_usb_descriptor_t getClassDescriptor;
-  get_usb_descriptor_any_t getDescriptor;
-  set_usb_config_num_t setConfigNum;
-  void *data;
+  usb_get_descriptor_t      getStringDescriptor;
+  usb_get_descriptor_t      getDeviceDescriptor;
+  usb_get_descriptor_t      getConfigurationDescriptor;
+  usb_get_descriptor_t      getClassDescriptor;
+  usb_get_descriptor_any_t  getDescriptor;
+  usb_set_config_num_t      setConfigNum;
+  usb_get_buffer_t          getBuffer;
+  usb_data_in_t             receiveData;
+  usb_data_out_t            sendData;
+  void                     *data;
 } __attribute__((packed, aligned(4)));
 
 #endif /* __USB_LINK_H__ */

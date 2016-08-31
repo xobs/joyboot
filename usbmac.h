@@ -45,9 +45,9 @@ struct usb_packet {
     struct {
       uint8_t pid;
       uint8_t data[10]; /* Including CRC */
-    };
+    } __attribute((packed, aligned(4)));
     uint8_t raw_data[11];
-  };
+  } __attribute((packed, aligned(4)));
   uint8_t size; /* Not including pid (so may be 0) */
   /* Checksum omitted */
 } __attribute__((packed, aligned(4)));
@@ -55,6 +55,8 @@ struct usb_packet {
 enum usb_mac_packet_type {
   packet_type_none,
   packet_type_setup,
+  packet_type_setup_in,
+  packet_type_setup_out,
   packet_type_in,
   packet_type_out,
 };
@@ -78,12 +80,11 @@ struct USBLink;
 struct USBMAC {
   struct USBPHY *phy;
   struct USBLink *link;
-  int phy_internal_is_ready;
 
   union {
     uint8_t data_in[8];
     struct usb_mac_setup_packet data_setup;
-  };
+  } __attribute((packed, aligned(4)));
 
   const void *data_out;
   int32_t data_out_left;
@@ -96,13 +97,15 @@ struct USBMAC {
   struct usb_packet packet; /* Currently-queued packet */
   int packet_queued;    /* Whether a packet is queued */
 
+  uint32_t tok_pos;     /* Position within the current token */
+  void *tok_buf;        /* Buffer storing current token's data */
+  uint8_t tok_addr;     /* Last token's address */
+  uint8_t tok_epnum;    /* Last token's endpoint */
+
   uint8_t data_buffer;  /* Whether we're sending DATA0 or DATA1 */
   uint8_t packet_type;  /* PACKET_SETUP, PACKET_IN, or PACKET_OUT */
 
   uint8_t address;      /* Our configured address */
-
-  uint8_t tok_addr;     /* Last token's address */
-  uint8_t tok_epnum;    /* Last token's endpoint */
 } __attribute((packed, aligned(4)));
 
 /* Process all packets sitting in the queue */

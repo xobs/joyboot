@@ -25,8 +25,8 @@ DESTDIR ?= /usr
 PREFIX ?= $(DESTDIR)
 
 LDSCRIPT = KW01-bl.ld
-DBG_CFLAGS = -ggdb -g -DDEBUG -Wall
-DBG_LFLAGS = -ggdb -g -Wall
+DBG_CFLAGS = -ggdb -g -DDEBUG -Wall -Wextra
+DBG_LFLAGS = -ggdb -g -Wall -Wextra
 CFLAGS     = $(ADD_CFLAGS) $(PKG_CFLAGS) \
              -DVERSION=\"$(VERSION)\" -DPACKAGE=\"$(PACKAGE)\" \
              -DPREFIX=\"$(PREFIX)\" -DDESTDIR=\"$(DESTDIR)\" -DARDUINO=160 \
