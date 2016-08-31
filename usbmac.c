@@ -59,10 +59,6 @@ static void usb_mac_process_data(struct USBMAC *mac) {
 
   /* If there's no data, prepare a special NULL packet */
   if ((mac->data_out_left == 0) || (mac->data_out_max == 0)) {
-    static int null_packets = 0;
-
-//    if (null_packets++ == 1)
-//      asm("bkpt #0");
     mac->packet.data[0] = 0;  /* CRC16 for empty packets is 0 */
     mac->packet.data[1] = 0;
     mac->packet.size = 2;
@@ -111,6 +107,8 @@ void usbMacTransferSuccess(struct USBMAC *mac) {
     /* End of a MAC setup packet */
     if (mac->packet_type == packet_type_setup_out)
       mac->packet_type = packet_type_none;
+    if (mac->packet_type == packet_type_out)
+      mac->packet_type = packet_type_none;
   }
 
   mac->packet_queued = 0;
@@ -121,8 +119,8 @@ static int usb_mac_send_data(struct USBMAC *mac,
                              int count,
                              int max) {
 
-  while (mac->data_out)
-    usb_mac_process_data(mac);
+  if (mac->data_out)
+    asm("bkpt #4");
   mac->data_out_left = count;
   mac->data_out_max = max;
   mac->data_out = data;
@@ -130,7 +128,7 @@ static int usb_mac_send_data(struct USBMAC *mac,
   return 0;
 }
 
-int usbSendData(struct USBMAC *mac, int epnum, const void *data, int count) {
+int usbMacSendData(struct USBMAC *mac, int epnum, const void *data, int count) {
 
   (void)epnum;
   int ret;
@@ -310,10 +308,8 @@ static int usb_mac_process_setup(struct USBMAC *mac, const uint8_t packet[10]) {
 static inline void usb_mac_parse_token(struct USBMAC *mac,
                                        const uint8_t packet[2]) {
 
-  mac->tok_addr = packet[0] >> 1;
-  mac->tok_epnum = (packet[1] >> 5) | ((packet[0] << 5) & 1);
-  mac->tok_pos = 0;
-  mac->tok_buf = mac->link->getBuffer(mac->link, mac->tok_epnum);
+  mac->tok_addr = packet[1] >> 3;
+  mac->tok_epnum = ((packet[0] >> 7) & 1) | ((packet[1] & 7) << 1);
 }
 
 static void usb_mac_parse_data(struct USBMAC *mac,
@@ -328,11 +324,15 @@ static void usb_mac_parse_data(struct USBMAC *mac,
     break;
 
   case packet_type_in:
+    /* If there is data, it will be fetched during parse_token */
     break;
 
   case packet_type_out:
-    memcpy(mac->tok_buf + mac->tok_pos, packet, count);
-    mac->tok_pos += count;
+    //mac->link->receiveData(mac->link, mac->tok_epnum, count, packet);
+    memcpy(mac->tok_buf + mac->tok_pos, packet, count - 2);
+    mac->tok_pos += (count - 2);
+    if (!mac->link->receiveData(mac->link, mac->tok_epnum, count, packet))
+      mac->packet_type = packet_type_none;
     break;
 
   case packet_type_none:
@@ -373,6 +373,8 @@ int usbMacProcess(struct USBMAC *mac,
       mac->data_buffer = 0;
       mac->packet_type = packet_type_out;
       usb_mac_parse_token(mac, packet + 1);
+      mac->tok_pos = 0;
+      mac->tok_buf = mac->link->getReceiveBuffer(mac->link, mac->tok_epnum, NULL);
     }
     break;
 
@@ -381,13 +383,18 @@ int usbMacProcess(struct USBMAC *mac,
       mac->data_buffer = 0;
       mac->packet_type = packet_type_in;
       usb_mac_parse_token(mac, packet + 1);
+
+      void *buffer;
+      int32_t size;
+      buffer = mac->link->getSendBuffer(mac->link, mac->tok_epnum, &size);
+
+      if (buffer) {
+        usb_mac_send_data(mac, buffer, size, size);
+      }
     }
     break;
 
   case USB_PID_ACK:
-    if (mac->packet_type == packet_type_in)
-      mac->link->receiveData(mac->link, mac->tok_epnum, mac->tok_pos, mac->tok_buf);
-
     if (!mac->data_out) {
       mac->data_out_left = 0;
       mac->data_out_max = 0;

@@ -131,6 +131,6 @@ struct USBPHY *usbMacPhy(struct USBMAC *mac);
 /* Indicate that the transfer concluded successfully */
 void usbMacTransferSuccess(struct USBMAC *mac);
 
-int usbSendData(struct USBMAC *mac, int epnum, const void *data, int count);
+int usbMacSendData(struct USBMAC *mac, int epnum, const void *data, int count);
 
 #endif /* __USB_MAC_H__ */

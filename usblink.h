@@ -107,7 +107,9 @@ typedef int (*usb_get_descriptor_any_t)(struct USBLink *link,
  * the specified endpoint.
  * It is up to the user to ensure the buffer is large enough.
  */
-typedef void * (*usb_get_buffer_t)(struct USBLink *link, uint8_t epnum);
+typedef void * (*usb_get_buffer_t)(struct USBLink *link,
+                                   uint8_t epnum,
+                                   int32_t *size);
 
 /*
  * When data is received (i.e. OUT EP), this function will be called.
@@ -127,6 +129,7 @@ typedef int (*usb_data_out_t)(struct USBLink *link,
 typedef void (*usb_set_config_num_t)(struct USBLink *link,
                                      int configNum);
 
+struct USBMAC;
 struct USBLink {
   usb_get_descriptor_t      getStringDescriptor;
   usb_get_descriptor_t      getDeviceDescriptor;
@@ -134,10 +137,12 @@ struct USBLink {
   usb_get_descriptor_t      getClassDescriptor;
   usb_get_descriptor_any_t  getDescriptor;
   usb_set_config_num_t      setConfigNum;
-  usb_get_buffer_t          getBuffer;
+  usb_get_buffer_t          getReceiveBuffer;
+  usb_get_buffer_t          getSendBuffer;
   usb_data_in_t             receiveData;
   usb_data_out_t            sendData;
   void                     *data;
+  struct USBMAC            *mac;
 } __attribute__((packed, aligned(4)));
 
 #endif /* __USB_LINK_H__ */

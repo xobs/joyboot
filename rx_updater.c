@@ -241,22 +241,22 @@ static int get_string_descriptor(struct USBLink *link,
   }
 
   if (num == 1)
-    return send_string_descriptor("Product is cool", data);
+    return send_string_descriptor("10", data);
 
   if (num == 2)
-    return send_string_descriptor("Company is cool", data);
+    return send_string_descriptor("21", data);
 
   if (num == 3)
-    return send_string_descriptor("Serial numbers are cool", data);
+    return send_string_descriptor("32", data);
 
   if (num == 4)
-    return send_string_descriptor("Update", data);
+    return send_string_descriptor("43", data);
 
   if (num == 5)
-    return send_string_descriptor("Update Configuration", data);
+    return send_string_descriptor("54", data);
 
   if (num == 6)
-    return send_string_descriptor("Virtual Keyboard", data);
+    return send_string_descriptor("65", data);
 
   return 0;
 }
@@ -312,16 +312,43 @@ static int get_default_descriptor(struct USBLink *link,
   (void)setup;
   (void)data;
 
+  /*
+  if (setup->bmRequestType == 0xa1) {
+    static uint8_t dumb_features[] = {0x01, 0x23, 0x45};
+    *data = dumb_features;
+    return sizeof(dumb_features);
+  }
+  */
+
   return 0;
 }
 
 uint32_t rx_buffer[BUFFER_SIZE / sizeof(uint32_t)];
-static void * get_usb_buffer(struct USBLink *link, uint8_t epNum)
+static void * get_usb_rx_buffer(struct USBLink *link, uint8_t epNum, int32_t *size)
 {
   (void)link;
   (void)epNum;
 
+  if (size)
+    *size = sizeof(rx_buffer);
   return rx_buffer;
+}
+
+static void *ep2_buffer;
+static uint32_t ep2_buffer_size;
+
+static void * get_usb_tx_buffer(struct USBLink *link, uint8_t epNum, int32_t *size)
+{
+  (void)link;
+  (void)epNum;
+
+  if (epNum == 2) {
+    if (size)
+      *size = ep2_buffer_size;
+    return ep2_buffer;
+  }
+
+  return NULL;
 }
 
 static int received_data(struct USBLink *link,
@@ -334,6 +361,14 @@ static int received_data(struct USBLink *link,
   (void)bytes;
   (void)data;
 
+  if (epNum == 2) {
+    static uint8_t buffer[] = {0xde, 0xad, 0xbe, 0xef, 0xaa, 0x55, 0xff, 0x00};
+
+    ep2_buffer_size = sizeof(buffer);
+    ep2_buffer = buffer;
+  }
+
+  /* Return 0, indicating this packet is complete. */
   return 0;
 }
 
@@ -346,20 +381,20 @@ static int send_data_finished(struct USBLink *link, uint8_t epNum, const void *d
   return 0;
 }
 
-struct USBLink hid_link = {
+static struct USBLink hid_link = {
   .getStringDescriptor        = get_string_descriptor,
   .getDeviceDescriptor        = get_device_descriptor,
   .getConfigurationDescriptor = get_configuration_descriptor,
   .getClassDescriptor         = get_class_descriptor,
   .getDescriptor              = get_default_descriptor,
   .setConfigNum               = set_usb_config_num,
-  .getBuffer                  = get_usb_buffer,
+  .getSendBuffer              = get_usb_tx_buffer,
+  .getReceiveBuffer           = get_usb_rx_buffer,
   .sendData                   = send_data_finished,
   .receiveData                = received_data,
 };
 
 
-int count;
 void VectorB8(void)
 {
   usbCaptureI(&defaultUsbPhy);
@@ -381,6 +416,7 @@ int updateRx(void)
 
   usbMacInit(usbMacDefault(), &hid_link);
   usbPhyInit(&defaultUsbPhy, usbMacDefault());
+  hid_link.mac = usbMacDefault();
 
   {
     int i;
