@@ -93,11 +93,12 @@ void usbPhyWorker(struct USBPHY *phy) {
     uint8_t *in_ptr = (uint8_t *)phy->read_queue[phy->read_queue_tail];
     int count = in_ptr[11];
 
-    usbMacProcess(phy->mac, in_ptr, count);
-
-    // Advance to the next packet
+    // Advance to the next packet (allowing us to be reentrant)
     phy->read_queue_tail++;
     phy->read_queue_tail &= PHY_READ_QUEUE_MASK;
+
+    // Process the current packet
+    usbMacProcess(phy->mac, in_ptr, count);
   }
   return;
 }
