@@ -241,22 +241,22 @@ static int get_string_descriptor(struct USBLink *link,
   }
 
   if (num == 1)
-    return send_string_descriptor("10", data);
+    return send_string_descriptor("123", data);
 
   if (num == 2)
     return send_string_descriptor("21", data);
 
   if (num == 3)
-    return send_string_descriptor("32", data);
+    return send_string_descriptor("1234567", data);
 
   if (num == 4)
-    return send_string_descriptor("43", data);
+    return send_string_descriptor("123456", data);
 
   if (num == 5)
     return send_string_descriptor("54", data);
 
   if (num == 6)
-    return send_string_descriptor("65", data);
+    return send_string_descriptor("12345678901234", data);
 
   return 0;
 }
