@@ -30,7 +30,11 @@ void usbCaptureI(struct USBPHY *phy) {
   samples[11] = ret;
 
   if (samples[0] == USB_PID_IN) {
-    if (!phy->queued_size) {
+
+    /* Make sure we have queued data, and that it's for this particular EP */
+    if ((!phy->queued_size)
+    || (((((const uint16_t *)(samples+1))[0] >> 7) & 0xf) != phy->queued_epnum))
+    {
       uint8_t pkt[] = {USB_PID_NAK};
       usbPhyWriteI(phy, pkt, sizeof(pkt));
       goto out;
@@ -69,9 +73,11 @@ out:
   return;
 }
 
-int usbPhyWritePrepare(struct USBPHY *phy, const void *buffer, int size) {
-
+int usbPhyWritePrepare(struct USBPHY *phy, int epnum,
+                       const void *buffer, int size)
+{
   phy->queued_data = buffer;
+  phy->queued_epnum = epnum;
   __DMB();
   phy->queued_size = size;
   return 0;
