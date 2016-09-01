@@ -150,7 +150,7 @@ static const struct usb_configuration_descriptor configuration_descriptor = {
     /*  uint8_t  bEndpointAddress;    */ 0x81,  /* EP1 (IN) */
     /*  uint8_t  bmAttributes;        */ 3,     /* Interrupt */
     /*  uint16_t wMaxPacketSize;      */ 0x08, 0x00,
-    /*  uint8_t  bInterval;           */ 6, /* Every 1 ms */
+    /*  uint8_t  bInterval;           */ 6, /* Every 6 ms */
     /* }                              */
 
     /* struct usb_interface_descriptor { */
@@ -182,7 +182,7 @@ static const struct usb_configuration_descriptor configuration_descriptor = {
     /*  uint8_t  bEndpointAddress;    */ 0x82,  /* EP1 (IN) */
     /*  uint8_t  bmAttributes;        */ 3,     /* Interrupt */
     /*  uint16_t wMaxPacketSize;      */ 0x08, 0x00,
-    /*  uint8_t  bInterval;           */ 6, /* Every 1 ms */
+    /*  uint8_t  bInterval;           */ 6, /* Every 6 ms */
     /* }                              */
 
     /* struct usb_endpoint_descriptor { */
@@ -191,7 +191,7 @@ static const struct usb_configuration_descriptor configuration_descriptor = {
     /*  uint8_t  bEndpointAddress;    */ 0x02,  /* EP1 (OUT) */
     /*  uint8_t  bmAttributes;        */ 3,     /* Interrupt */
     /*  uint16_t wMaxPacketSize;      */ 0x08, 0x00,
-    /*  uint8_t  bInterval;           */ 6, /* Every 1 ms */
+    /*  uint8_t  bInterval;           */ 6, /* Every 6 ms */
     /* }                              */
   },
 };
