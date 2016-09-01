@@ -59,6 +59,13 @@ static void usb_mac_process_data(struct USBMAC *mac) {
 
   /* If there's no data, prepare a special NULL packet */
   if ((mac->data_out_left == 0) || (mac->data_out_max == 0)) {
+
+    /* The special-null thing only happens for EP0 */
+    if (mac->data_out_epnum != 0) {
+        mac->data_out = NULL;
+        mac->packet_queued = 0;
+        return;
+    }
     mac->packet.data[0] = 0;  /* CRC16 for empty packets is 0 */
     mac->packet.data[1] = 0;
     mac->packet.size = 2;
