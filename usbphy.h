@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#define PHY_READ_QUEUE_SIZE 4
+#define PHY_READ_QUEUE_SIZE 16
 #define PHY_READ_QUEUE_MASK (PHY_READ_QUEUE_SIZE - 1)
 
 struct USBMAC;
@@ -66,6 +66,7 @@ int usbPhyWritePrepare(struct USBPHY *phy, int epnum,
                        const void *buffer, int size);
 void usbCaptureI(struct USBPHY *phy);
 
+int usbPhyProcessNextEvent(struct USBPHY *phy);
 void usbPhyWorker(struct USBPHY *phy);
 
 void usbPhyAttach(struct USBPHY *phy);
