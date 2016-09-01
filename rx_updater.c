@@ -362,10 +362,11 @@ static int received_data(struct USBLink *link,
   (void)data;
 
   if (epNum == 2) {
-    static uint8_t buffer[] = {0xde, 0xad, 0xbe, 0xef, 0xaa, 0x55, 0xff, 0x00};
+    static uint8_t buffer[] = {0x00, 0xff, 0xbe, 0xef, 0xaa, 0x55, 0xff, 0x00};
 
-    ep2_buffer_size = sizeof(buffer);
-    ep2_buffer = buffer;
+    usbMacSendData(link->mac, epNum, buffer, sizeof(buffer));
+    buffer[0] = ((const uint8_t *)data)[0];
+    buffer[1]++;
   }
 
   /* Return 0, indicating this packet is complete. */
