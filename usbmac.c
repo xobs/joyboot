@@ -62,7 +62,8 @@ static void usb_mac_process_data(struct USBMAC *mac) {
     mac->packet.data[0] = 0;  /* CRC16 for empty packets is 0 */
     mac->packet.data[1] = 0;
     mac->packet.size = 2;
-    usbPhyWritePrepare(mac->phy, &mac->packet, mac->packet.size + 1);
+    usbPhyWritePrepare(mac->phy, mac->data_out_epnum,
+                       &mac->packet, mac->packet.size + 1);
     return;
   }
 
@@ -85,7 +86,8 @@ static void usb_mac_process_data(struct USBMAC *mac) {
   mac->packet.data[mac->packet.size++] = crc >> 8;
 
   /* Prepare the packet, including the PID at the end */
-  usbPhyWritePrepare(mac->phy, &mac->packet, mac->packet.size + 1);
+  usbPhyWritePrepare(mac->phy, mac->data_out_epnum,
+                     &mac->packet, mac->packet.size + 1);
 }
 
 void usbMacTransferSuccess(struct USBMAC *mac) {
@@ -115,12 +117,14 @@ void usbMacTransferSuccess(struct USBMAC *mac) {
 }
 
 static int usb_mac_send_data(struct USBMAC *mac,
+                             int epnum,
                              const void *data,
                              int count,
                              int max) {
 
   if (mac->data_out)
     asm("bkpt #4");
+  mac->data_out_epnum = epnum;
   mac->data_out_left = count;
   mac->data_out_max = max;
   mac->data_out = data;
@@ -130,10 +134,9 @@ static int usb_mac_send_data(struct USBMAC *mac,
 
 int usbMacSendData(struct USBMAC *mac, int epnum, const void *data, int count) {
 
-  (void)epnum;
   int ret;
 
-  ret = usb_mac_send_data(mac, data, count, count);
+  ret = usb_mac_send_data(mac, epnum, data, count, count);
   if (ret)
     return ret;
 
@@ -213,7 +216,7 @@ static int usb_mac_process_setup_read(struct USBMAC *mac,
   last_data = response;
   last_pkt = *setup;
 
-  usb_mac_send_data(mac, response, len, setup->wLength);
+  usb_mac_send_data(mac, 0, response, len, setup->wLength);
   return 0;
 }
 
@@ -280,7 +283,7 @@ static int usb_mac_process_setup_write(struct USBMAC *mac,
   /* We must always send a response packet.  If there's ever a time when
    * we shouldn't send a packet, simply "return" rather than "break" above.
    */
-  usb_mac_send_data(mac, response, len, max);
+  usb_mac_send_data(mac, 0, response, len, max);
 
   return 0;
 }
@@ -310,6 +313,8 @@ static inline void usb_mac_parse_token(struct USBMAC *mac,
 
   mac->tok_addr = packet[1] >> 3;
   mac->tok_epnum = ((packet[0] >> 7) & 1) | ((packet[1] & 7) << 1);
+  //mac->tok_epnum = (((const uint16_t *)packet)[0] >> 7) & 0xf;
+  //mac->tok_addr  = (((const uint16_t *)packet)[0] >> 11) & 0x1f;
 }
 
 static void usb_mac_parse_data(struct USBMAC *mac,
@@ -389,7 +394,7 @@ int usbMacProcess(struct USBMAC *mac,
       buffer = mac->link->getSendBuffer(mac->link, mac->tok_epnum, &size);
 
       if (buffer) {
-        usb_mac_send_data(mac, buffer, size, size);
+        usb_mac_send_data(mac, mac->tok_epnum, buffer, size, size);
       }
     }
     break;

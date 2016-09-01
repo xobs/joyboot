@@ -89,6 +89,7 @@ struct USBMAC {
   const void *data_out;
   int32_t data_out_left;
   int32_t data_out_max;
+  int32_t data_out_epnum;
 
 #if defined(_CHIBIOS_RT_)
   thread_reference_t thread;
