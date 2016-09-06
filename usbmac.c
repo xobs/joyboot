@@ -131,10 +131,8 @@ static int usb_mac_send_data(struct USBMAC *mac,
 
 //  if (mac->data_out)
 //    asm("bkpt #4");
-//  if (mac->data_out)
-//    return -1;
-  while (mac->data_out)
-    usbPhyProcessNextEvent(mac->phy);
+//  while (mac->data_out)
+//    usbPhyProcessNextEvent(mac->phy);
   mac->data_out_epnum = epnum;
   mac->data_out_left = count;
   mac->data_out_max = max;
