@@ -417,6 +417,7 @@ int usbMacProcess(struct USBMAC *mac,
       mac->data_out_left = 0;
       mac->data_out_max = 0;
       mac->data_out = NULL;
+      mac->packet_type = packet_type_none;
 #if defined(_CHIBIOS_RT_)
         if (mac->thread)
           osalThreadResumeS(&mac->thread, MSG_OK);
