@@ -147,6 +147,10 @@ int usbMacSendData(struct USBMAC *mac, int epnum, const void *data, int count) {
 
   int ret;
 
+  if (mac->data_out) {
+    return -11; /* EAGAIN */
+  }
+
   ret = usb_mac_send_data(mac, epnum, data, count, count);
   if (ret)
     return ret;
