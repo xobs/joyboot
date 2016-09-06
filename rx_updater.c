@@ -6,6 +6,7 @@
 #include "kl17.h"
 
 #define BUFFER_SIZE 8
+#define NUM_BUFFERS 4
 
 static struct USBPHY defaultUsbPhy = {
   /* PTB0 */
@@ -323,15 +324,22 @@ static int get_default_descriptor(struct USBLink *link,
   return 0;
 }
 
-uint32_t rx_buffer[BUFFER_SIZE / sizeof(uint32_t)];
-static void * get_usb_rx_buffer(struct USBLink *link, uint8_t epNum, int32_t *size)
+uint32_t rx_buffer[NUM_BUFFERS][BUFFER_SIZE / sizeof(uint32_t)];
+static uint8_t rx_buffer_head;
+static uint8_t rx_buffer_tail;
+
+uint32_t rx_buffer_queries = 0;
+static void * get_usb_rx_buffer(struct USBLink *link,
+                                uint8_t epNum,
+                                int32_t *size)
 {
   (void)link;
   (void)epNum;
 
   if (size)
-    *size = sizeof(rx_buffer);
-  return rx_buffer;
+    *size = sizeof(rx_buffer[0]);
+  rx_buffer_queries++;
+  return rx_buffer[rx_buffer_head];
 }
 
 static void *ep2_buffer;
@@ -362,11 +370,8 @@ static int received_data(struct USBLink *link,
   (void)data;
 
   if (epNum == 2) {
-    static uint8_t buffer[] = {0x00, 0xff, 0xbe, 0xef, 0xaa, 0x55, 0xff, 0x00};
-
-    usbMacSendData(link->mac, epNum, buffer, sizeof(buffer));
-    buffer[0] = ((const uint8_t *)data)[0];
-    buffer[1]++;
+    rx_buffer_head = (rx_buffer_head + 1) & (NUM_BUFFERS - 1);
+    //asm("bkpt #3");
   }
 
   /* Return 0, indicating this packet is complete. */
@@ -405,6 +410,8 @@ void VectorB8(void)
 }
 
 int done;
+int num_sent = 0;
+int num_failed = 0;
 
 int updateRx(void)
 {
@@ -436,7 +443,19 @@ int updateRx(void)
   usbPhyAttach(&defaultUsbPhy);
 
   while (!done) {
-    usbPhyWorker(&defaultUsbPhy);
+    usbPhyProcessNextEvent(&defaultUsbPhy);
+
+    if (rx_buffer_head != rx_buffer_tail) {
+
+      static uint8_t buffer[] = {0x00, 0x4f, 0xbe, 0xef,
+                                 0xaa, 0x55, 0xff, 0x00};
+      buffer[0] = ((const uint8_t *)rx_buffer[rx_buffer_tail])[0];
+
+      if (usbMacSendData(defaultUsbPhy.mac, 2, buffer, sizeof(buffer)) >= 0) {
+        rx_buffer_tail = (rx_buffer_tail + 1) & (NUM_BUFFERS - 1);
+        buffer[1]++;
+      }
+    }
   }
 
   return 0;
