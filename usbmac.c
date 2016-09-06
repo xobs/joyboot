@@ -129,14 +129,18 @@ static int usb_mac_send_data(struct USBMAC *mac,
                              int count,
                              int max) {
 
-//  if (mac->data_out)
-//    asm("bkpt #4");
-//  while (mac->data_out)
-//    usbPhyProcessNextEvent(mac->phy);
+  /* De-queue any data that may already be queued. */
+  mac->packet_queued = 0;
   mac->data_out_epnum = epnum;
   mac->data_out_left = count;
   mac->data_out_max = max;
   mac->data_out = data;
+
+#if defined(_CHIBIOS_RT_)
+  /* Indicate failure if there is a thread blocking */
+  if (mac->thread)
+    osalThreadResumeS(&mac->thread, MSG_RESET);
+#endif
 
   return 0;
 }
