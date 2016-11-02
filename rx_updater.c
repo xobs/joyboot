@@ -7,6 +7,7 @@
 
 #define BUFFER_SIZE 8
 #define NUM_BUFFERS 4
+#define EP_INTERVAL_MS 6
 
 static struct USBPHY defaultUsbPhy = {
   /* PTB0 */
@@ -151,7 +152,7 @@ static const struct usb_configuration_descriptor configuration_descriptor = {
     /*  uint8_t  bEndpointAddress;    */ 0x81,  /* EP1 (IN) */
     /*  uint8_t  bmAttributes;        */ 3,     /* Interrupt */
     /*  uint16_t wMaxPacketSize;      */ 0x08, 0x00,
-    /*  uint8_t  bInterval;           */ 6, /* Every 6 ms */
+    /*  uint8_t  bInterval;           */ EP_INTERVAL_MS, /* Every 6 ms */
     /* }                              */
 
     /* struct usb_interface_descriptor { */
@@ -183,7 +184,7 @@ static const struct usb_configuration_descriptor configuration_descriptor = {
     /*  uint8_t  bEndpointAddress;    */ 0x82,  /* EP1 (IN) */
     /*  uint8_t  bmAttributes;        */ 3,     /* Interrupt */
     /*  uint16_t wMaxPacketSize;      */ 0x08, 0x00,
-    /*  uint8_t  bInterval;           */ 6, /* Every 6 ms */
+    /*  uint8_t  bInterval;           */ EP_INTERVAL_MS, /* Every 6 ms */
     /* }                              */
 
     /* struct usb_endpoint_descriptor { */
@@ -192,7 +193,7 @@ static const struct usb_configuration_descriptor configuration_descriptor = {
     /*  uint8_t  bEndpointAddress;    */ 0x02,  /* EP1 (OUT) */
     /*  uint8_t  bmAttributes;        */ 3,     /* Interrupt */
     /*  uint16_t wMaxPacketSize;      */ 0x08, 0x00,
-    /*  uint8_t  bInterval;           */ 6, /* Every 6 ms */
+    /*  uint8_t  bInterval;           */ EP_INTERVAL_MS, /* Every 6 ms */
     /* }                              */
   },
 };
@@ -251,7 +252,7 @@ static int get_string_descriptor(struct USBLink *link,
     return send_string_descriptor("1234567", data);
 
   if (num == 4)
-    return send_string_descriptor("123456", data);
+    return send_string_descriptor("12345", data);
 
   if (num == 5)
     return send_string_descriptor("54", data);
