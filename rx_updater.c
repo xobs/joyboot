@@ -124,7 +124,7 @@ static const struct usb_configuration_descriptor configuration_descriptor = {
   .bNumInterfaces = 2,
   .bConfigurationValue = 1,
   .iConfiguration = 5,
-  .bmAttributes = 0xa0,       /* Remote wakeup supported */
+  .bmAttributes = 0x80,       /* Remote wakeup not supported */
   .bMaxPower = 100/2,         /* 100 mA (in 2-mA units) */
   .data = {
     /* struct usb_interface_descriptor { */
