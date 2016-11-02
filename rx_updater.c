@@ -75,10 +75,13 @@ static const uint8_t class_descriptor[] = {
   0xA1, 0x01,         // Collection (Application)
     0x15, 0x00,       //      Logical Minimum (data bytes in the report may have minimum value = 0x00)
     0x26, 0xFF, 0x00, //      Logical Maximum (data bytes in the report may have maximum value = 0x00FF = unsigned 255)
+    
     0x75, 0x08,       //      Report Size: 8-bit field size
+    
     0x95, BUFFER_SIZE,//      Report Count: Make eight 8-bit fields (the next time the parser hits an "Input", "Output", or "Feature" item)
     0x09, 0x01,       //      Usage: Undefined
     0x81, 0x02,       //      Input (Data, Array, Abs): Instantiates input packet fields based on the above report size, count, logical min/max, and usage.
+    
     0x95, BUFFER_SIZE,//      Report Count: Make eight 8-bit fields (the next time the parser hits an "Input", "Output", or "Feature" item)
     0x09, 0x01,       //      Usage: Undefined
     0x91, 0x00,       //      Output (Data, Array, Abs): Instantiates
@@ -86,7 +89,8 @@ static const uint8_t class_descriptor[] = {
                       //      and count as "Input" fields, since nothing
                       //      new/different was specified to the parser
                       //      since the "Input" item.
-    0x95, BUFFER_SIZE,//      Report Count: Make eight 8-bit fields (the next time the parser hits an "Input", "Output", or "Feature" item)
+    
+    0x95, BUFFER_SIZE,//      Feature Report Count: Make eight 8-bit fields (the next time the parser hits an "Input", "Output", or "Feature" item)
     0x09, 0x01,       //      Usage: Undefined
     0xB1, 0x02,       //      Feature: Data
   0xC0 // End Collection
@@ -142,8 +146,8 @@ static const struct usb_configuration_descriptor configuration_descriptor = {
     /*  uint8_t  bCountryCode;            */ 0,
     /*  uint8_t  bNumDescriptors;         */ 1, /* We have only one REPORT */
     /*  uint8_t  bReportDescriptorType;   */ DT_HID_REPORT,
-    /*  uint16_t wReportDescriptorLength; */ sizeof(kbd_class_descriptor),
-                                             sizeof(kbd_class_descriptor) >> 8,
+    /*  uint16_t wReportDescriptorLength; */ sizeof(class_descriptor),
+                                             sizeof(class_descriptor) >> 8,
     /* }                                  */
 
     /* struct usb_endpoint_descriptor { */
