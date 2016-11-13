@@ -53,9 +53,9 @@ static void usb_mac_process_data(struct USBMAC *mac) {
 
   /* Pick the correct PID, DATA0 or DATA1 */
   if ((mac->data_buffer++) & 1)
-    mac->packet.pid = USB_PID_DATA0;
-  else
     mac->packet.pid = USB_PID_DATA1;
+  else
+    mac->packet.pid = USB_PID_DATA0;
 
   /* If there's no data, prepare a special NULL packet */
   if ((mac->data_out_left == 0) || (mac->data_out_max == 0)) {
@@ -365,7 +365,6 @@ static void usb_mac_parse_data(struct USBMAC *mac,
   // The remote side sends an empty packet (with only a CRC16) to indicate END.
   if (count == 2) {
     mac->packet_type = packet_type_none;
-    mac->data_buffer = 0;
   }
 }
 
@@ -376,7 +375,7 @@ int usbMacProcess(struct USBMAC *mac,
   switch(packet[0]) {
   case USB_PID_SETUP:
     mac->packet_type = packet_type_setup;
-    mac->data_buffer = 0;
+    mac->data_buffer = 1;
     usb_mac_parse_token(mac, packet + 1);
     break;
 
@@ -390,7 +389,6 @@ int usbMacProcess(struct USBMAC *mac,
 
   case USB_PID_OUT:
     if (mac->packet_type == packet_type_none) {
-      mac->data_buffer = 0;
       mac->packet_type = packet_type_out;
       usb_mac_parse_token(mac, packet + 1);
       mac->tok_pos = 0;
@@ -400,7 +398,6 @@ int usbMacProcess(struct USBMAC *mac,
 
   case USB_PID_IN:
     if (mac->packet_type == packet_type_none) {
-      mac->data_buffer = 0;
       mac->packet_type = packet_type_in;
       usb_mac_parse_token(mac, packet + 1);
 
