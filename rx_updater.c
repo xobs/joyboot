@@ -4,9 +4,18 @@
 #include "usbmac.h"
 #include "usblink.h"
 #include "kl17.h"
+#include "flash.h"
+
+#include "palawan_bl.h"
+#include "murmur3.h"
 
 #define BUFFER_SIZE 8
 #define NUM_BUFFERS 4
+#define EP_INTERVAL 10
+
+/* The area where the bootloader resides */
+#define FLASH_PROTECTED_AREA_OFFSET 0
+#define FLASH_PROTECTED_AREA_SIZE 8192
 
 static struct USBPHY defaultUsbPhy = {
   /* PTB0 */
@@ -151,7 +160,7 @@ static const struct usb_configuration_descriptor configuration_descriptor = {
     /*  uint8_t  bEndpointAddress;    */ 0x81,  /* EP1 (IN) */
     /*  uint8_t  bmAttributes;        */ 3,     /* Interrupt */
     /*  uint16_t wMaxPacketSize;      */ 0x08, 0x00,
-    /*  uint8_t  bInterval;           */ 6, /* Every 6 ms */
+    /*  uint8_t  bInterval;           */ EP_INTERVAL, /* Every 6 ms */
     /* }                              */
 
     /* struct usb_interface_descriptor { */
@@ -183,7 +192,7 @@ static const struct usb_configuration_descriptor configuration_descriptor = {
     /*  uint8_t  bEndpointAddress;    */ 0x82,  /* EP1 (IN) */
     /*  uint8_t  bmAttributes;        */ 3,     /* Interrupt */
     /*  uint16_t wMaxPacketSize;      */ 0x08, 0x00,
-    /*  uint8_t  bInterval;           */ 6, /* Every 6 ms */
+    /*  uint8_t  bInterval;           */ EP_INTERVAL, /* Every 6 ms */
     /* }                              */
 
     /* struct usb_endpoint_descriptor { */
@@ -192,7 +201,7 @@ static const struct usb_configuration_descriptor configuration_descriptor = {
     /*  uint8_t  bEndpointAddress;    */ 0x02,  /* EP1 (OUT) */
     /*  uint8_t  bmAttributes;        */ 3,     /* Interrupt */
     /*  uint16_t wMaxPacketSize;      */ 0x08, 0x00,
-    /*  uint8_t  bInterval;           */ 6, /* Every 6 ms */
+    /*  uint8_t  bInterval;           */ EP_INTERVAL, /* Every 6 ms */
     /* }                              */
   },
 };
@@ -248,10 +257,10 @@ static int get_string_descriptor(struct USBLink *link,
     return send_string_descriptor("21", data);
 
   if (num == 3)
-    return send_string_descriptor("1234567", data);
+    return send_string_descriptor("1236", data);
 
   if (num == 4)
-    return send_string_descriptor("123456", data);
+    return send_string_descriptor("12345", data);
 
   if (num == 5)
     return send_string_descriptor("54", data);
@@ -413,8 +422,127 @@ int done;
 int num_sent = 0;
 int num_failed = 0;
 
+static int do_erase_flash(struct bl_state *state, struct bl_pkt *result,
+                          uint32_t address, uint32_t count)
+{
+  int ret;
+
+  // Make sure we're not overwriting the bootloader
+  if ((address < (FLASH_PROTECTED_AREA_OFFSET + FLASH_PROTECTED_AREA_SIZE)) && (state->flash_is_protected))
+    return address_out_of_range;
+
+  // XXX If the protected area isn't located at offset 0, then this could extend into it
+
+  // Make sure we don't run off the end of flash
+  if ((address + count) > P_FLASH_SIZE)
+    return address_out_of_range;
+
+  ret = flashEraseSectors(address / FTFx_PSECTOR_SIZE, count / FTFx_PSECTOR_SIZE);
+
+  if (ret != F_ERR_OK) {
+    result->result.extra = ret;
+    return subsystem_error;
+  }
+
+  return no_error;
+}
+
+static int do_program_flash(struct bl_state *state, struct bl_pkt *result,
+                            uint32_t value)
+{
+  int ret;
+  uint32_t offset;
+
+  offset = state->offset;
+
+  if ((offset >= FLASH_PROTECTED_AREA_OFFSET) && (offset < (FLASH_PROTECTED_AREA_OFFSET + FLASH_PROTECTED_AREA_SIZE)))
+    return address_out_of_range;
+
+  ret = flashProgram((uint8_t *)&value, (uint8_t *)&offset, sizeof(value));
+  if (ret != F_ERR_OK) {
+    result->result.extra = ret;
+    return subsystem_error;
+  }
+
+  state->offset += 4;
+  return no_error;
+}
+
+static int do_set_address(struct bl_state *state, struct bl_pkt *result,
+                          uint32_t offset)
+{
+  (void)result;
+
+  if (offset > P_FLASH_SIZE)
+    return address_out_of_range;
+
+  if ((offset > FLASH_PROTECTED_AREA_OFFSET) && (offset < (FLASH_PROTECTED_AREA_OFFSET + FLASH_PROTECTED_AREA_SIZE)))
+    return address_out_of_range;
+
+  state->offset = offset;
+  return no_error;
+}
+
+static int do_echo_back(struct bl_state *state, struct bl_pkt *result,
+                        const struct bl_pkt *packet)
+{
+  (void)state;
+  memcpy(result, packet, sizeof(*result));
+  return no_error;
+}
+
+static int do_hash_memory(struct bl_state *state, struct bl_pkt *result,
+                          const struct bl_pkt *packet)
+{
+  (void)state;
+  uint32_t start = packet->hash.offset;
+  uint32_t length = packet->hash.size;
+
+  if (start & 3)
+    return address_not_valid;
+  
+  if (length & 3)
+    return size_not_valid;
+
+  MurmurHash3_x86_32((const void *)start, length, 0, result->result.reserved);
+
+  return no_error;
+}
+
+static int process_one_packet(struct bl_state *state,
+                              struct bl_pkt *result,
+                              const struct bl_pkt *packet)
+{
+
+  switch (packet->cmd) {
+
+  case erase_block:
+    return do_erase_flash(state, result, packet->erase_sector.offset, packet->erase_sector.count);
+
+  case program_value:
+    return do_program_flash(state, result, packet->program.data);
+
+  case set_address:
+    return do_set_address(state, result, packet->set_address.offset);
+
+  case echo_back:
+    return do_echo_back(state, result, packet);
+
+  case hash_memory:
+    return do_hash_memory(state, result, packet);
+  }
+
+  return unhandled_command;
+}
+
 int updateRx(void)
 {
+  struct bl_state state = {0};
+  int last_packet_num = -1;
+  static struct bl_pkt result_pkt = {0};
+
+  state.flash_is_protected = 1;
+
   /* Unlock PORTA and PORTB */
   SIM->SCGC5 |= SIM_SCGC5_PORTA | SIM_SCGC5_PORTB;
 
@@ -445,15 +573,28 @@ int updateRx(void)
   while (!done) {
     usbPhyProcessNextEvent(&defaultUsbPhy);
 
+    // If the rx_buffer_head has advnaced, then we have data to process in EP2
     if (rx_buffer_head != rx_buffer_tail) {
+      struct bl_pkt *incoming_pkt = (struct bl_pkt *)rx_buffer[rx_buffer_tail];
 
-      static uint8_t buffer[] = {0x00, 0x4f, 0xbe, 0xef,
-                                 0xaa, 0x55, 0xff, 0x00};
-      buffer[0] = ((const uint8_t *)rx_buffer[rx_buffer_tail])[0];
+      // If the last packet num is the same as this packet num, then we've processed
+      // this packet already, but were unsuccessful in sending the packet.  If not,
+      // as is the case here, handle it as a new packet.
+      if (rx_buffer_tail != last_packet_num) {
+        last_packet_num = rx_buffer_tail;
+        result_pkt.seq_num = incoming_pkt->seq_num;
+        result_pkt.cmd = packet_result;
 
-      if (usbMacSendData(defaultUsbPhy.mac, 2, buffer, sizeof(buffer)) >= 0) {
+        unsigned int i;
+        for (i = 0; i < sizeof(result_pkt.raw.data); i++)
+          result_pkt.raw.data[i] = 0;
+
+        result_pkt.result.code = process_one_packet(&state, &result_pkt, incoming_pkt);
+      }
+
+      // Advance the packet number only if this packet was sent successfully
+      if (!usbMacSendData(defaultUsbPhy.mac, 2, &result_pkt, sizeof(result_pkt))) {
         rx_buffer_tail = (rx_buffer_tail + 1) & (NUM_BUFFERS - 1);
-        buffer[1]++;
       }
     }
   }

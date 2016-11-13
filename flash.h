@@ -2,7 +2,7 @@
 #define _FLASH_H_
 
 #define P_FLASH_BASE              0x00000000
-#define P_FLASH_SIZE              32768
+#define P_FLASH_SIZE              131072
 
 #define READ_NORMAL_MARGIN        0x00
 #define READ_USER_MARGIN          0x01
