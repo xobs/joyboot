@@ -398,7 +398,7 @@ int usbMacProcess(struct USBMAC *mac,
 
   case USB_PID_IN:
     if (mac->packet_type == packet_type_none) {
-      mac->packet_type = packet_type_in;
+      mac->data_buffer = 0;
       usb_mac_parse_token(mac, packet + 1);
 
       void *buffer;
@@ -406,6 +406,7 @@ int usbMacProcess(struct USBMAC *mac,
       buffer = mac->link->getSendBuffer(mac->link, mac->tok_epnum, &size);
 
       if (buffer) {
+        mac->packet_type = packet_type_in;
         usb_mac_send_data(mac, mac->tok_epnum, buffer, size, size);
       }
     }
