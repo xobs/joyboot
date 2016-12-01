@@ -380,10 +380,12 @@ int usbMacProcess(struct USBMAC *mac,
     break;
 
   case USB_PID_DATA0:
+    mac->data_buffer++;
     usb_mac_parse_data(mac, packet + 1, count - 1);
     break;
 
   case USB_PID_DATA1:
+    mac->data_buffer++;
     usb_mac_parse_data(mac, packet + 1, count - 1);
     break;
 
@@ -398,7 +400,7 @@ int usbMacProcess(struct USBMAC *mac,
 
   case USB_PID_IN:
     if (mac->packet_type == packet_type_none) {
-      mac->data_buffer = 0;
+      //mac->data_buffer = 0;
       usb_mac_parse_token(mac, packet + 1);
 
       void *buffer;

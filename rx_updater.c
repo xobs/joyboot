@@ -42,7 +42,11 @@ void set_usb_config_num(struct USBLink *link, int configNum)
   ;
 }
 
-static const uint8_t kbd_class_descriptor[] = {
+//static const uint8_t kbd_class_descriptor[] = {
+//};
+
+static const uint8_t class_descriptor[] = {
+  #if 0
   0x05, 0x01, /* USAGE_PAGE (Generic Desktop)           */
   0x09, 0x06, /* USAGE (Keyboard)                       */
   0xa1, 0x01, /* COLLECTION (Application)               */
@@ -74,34 +78,32 @@ static const uint8_t kbd_class_descriptor[] = {
   0x19, 0x00, /*   USAGE_MINIMUM (Reserved)             */
   0x29, 0x65, /*   USAGE_MAXIMUM (Keyboard Application) */
   0x81, 0x00, /*   INPUT (Data,Ary,Abs)                 */
-  0xc0        /* END_COLLECTION                         */
-};
-
-static const uint8_t class_descriptor[] = {
-  0x06, 0x00, 0xFF,   // Usage Page = 0xFF00 (Vendor Defined Page 1)
-  0x09, 0x01,         // Usage (Vendor Usage 1)
-  0xA1, 0x01,         // Collection (Application)
-    0x15, 0x00,       //      Logical Minimum (data bytes in the report may have minimum value = 0x00)
-    0x26, 0xFF, 0x00, //      Logical Maximum (data bytes in the report may have maximum value = 0x00FF = unsigned 255)
+  0xc0,        /* END_COLLECTION                         */
+#endif
+  0x06, 0x00, 0xFF,   // USAGE_PAGE = 0xFF00 (Vendor Defined Page 1)
+  0x09, 0x01,         // USAGE (Vendor Usage 1)
+  0xA1, 0x01,         // COLLECTION (Application)
+    0x15, 0x00,       //      USAGE_MINIMUM (data bytes in the report may have minimum value = 0x00)
+    0x26, 0xFF, 0x00, //      USAGE_MAXIMUM (data bytes in the report may have maximum value = 0x00FF = unsigned 255)
     
-    0x75, 0x08,       //      Report Size: 8-bit field size
+    0x75, 0x08,       //      REPORT_SIZE (8-bit field size)
     
-    0x95, BUFFER_SIZE,//      Report Count: Make eight 8-bit fields (the next time the parser hits an "Input", "Output", or "Feature" item)
-    0x09, 0x01,       //      Usage: Undefined
-    0x81, 0x02,       //      Input (Data, Array, Abs): Instantiates input packet fields based on the above report size, count, logical min/max, and usage.
+    0x95, BUFFER_SIZE,//      REPORT_COUNT Make eight 8-bit fields (the next time the parser hits an "Input", "Output", or "Feature" item)
+    0x09, 0x01,       //      USAGE (Undefined)
+    0x81, 0x02,       //      INPUT (Data, Array, Abs): Instantiates input packet fields based on the above report size, count, logical min/max, and usage.
     
-    0x95, BUFFER_SIZE,//      Report Count: Make eight 8-bit fields (the next time the parser hits an "Input", "Output", or "Feature" item)
-    0x09, 0x01,       //      Usage: Undefined
-    0x91, 0x00,       //      Output (Data, Array, Abs): Instantiates
+    0x95, BUFFER_SIZE,//      REPORT_COUNT (Make eight 8-bit fields (the next time the parser hits an "Input", "Output", or "Feature" item))
+    0x09, 0x01,       //      USAGE (Undefined)
+    0x91, 0x00,       //      OUTPUT (Data, Array, Abs): Instantiates
                       //      output packet fields.  Uses same report size
                       //      and count as "Input" fields, since nothing
                       //      new/different was specified to the parser
                       //      since the "Input" item.
     
-    0x95, BUFFER_SIZE,//      Feature Report Count: Make eight 8-bit fields (the next time the parser hits an "Input", "Output", or "Feature" item)
-    0x09, 0x01,       //      Usage: Undefined
+    0x95, BUFFER_SIZE,//      REPORT_COUNT (Make eight 8-bit fields (the next time the parser hits an "Input", "Output", or "Feature" item))
+    0x09, 0x01,       //      USAGE (Undefined)
     0xB1, 0x02,       //      Feature: Data
-  0xC0 // End Collection
+  0xC0 // END_COLLECTION
 };
 
 static const struct usb_device_descriptor device_descriptor = {
@@ -124,17 +126,18 @@ static const struct usb_device_descriptor device_descriptor = {
 static const struct usb_configuration_descriptor configuration_descriptor = {
   .bLength = 9,//sizeof(struct usb_configuration_descriptor),
   .bDescriptorType = DT_CONFIGURATION,
-  .wTotalLength = (9  +  9 + 9 + 7  +  9 + 9 + 7 + 7)/*
+  .wTotalLength = (9  +  /*9 + 9 + 7  +*/  9 + 9 + 7 + 7)/*
                   (sizeof(struct usb_configuration_descriptor)
                 + sizeof(struct usb_interface_descriptor)
                 + sizeof(struct usb_hid_descriptor)
                 + sizeof(struct usb_endpoint_descriptor)*/,
-  .bNumInterfaces = 2,
+  .bNumInterfaces = 1,
   .bConfigurationValue = 1,
   .iConfiguration = 5,
   .bmAttributes = 0x80,       /* Remote wakeup not supported */
   .bMaxPower = 100/2,         /* 100 mA (in 2-mA units) */
   .data = {
+#if 0
     /* struct usb_interface_descriptor { */
     /*  uint8_t bLength;            */ 9,
     /*  uint8_t bDescriptorType;    */ DT_INTERFACE,
@@ -166,11 +169,11 @@ static const struct usb_configuration_descriptor configuration_descriptor = {
     /*  uint16_t wMaxPacketSize;      */ 0x08, 0x00,
     /*  uint8_t  bInterval;           */ EP_INTERVAL_MS, /* Every 6 ms */
     /* }                              */
-
+#endif
     /* struct usb_interface_descriptor { */
     /*  uint8_t bLength;            */ 9,
     /*  uint8_t bDescriptorType;    */ DT_INTERFACE,
-    /*  uint8_t bInterfaceNumber;   */ 1,
+    /*  uint8_t bInterfaceNumber;   */ 0,
     /*  uint8_t bAlternateSetting;  */ 0,
     /*  uint8_t bNumEndpoints;      */ 2, /* Two extra EPs */
     /*  uint8_t bInterfaceClass;    */ 3, /* HID class */
