@@ -553,9 +553,9 @@ int updateRx(void)
   /* Unlock PORTA and PORTB */
   SIM->SCGC5 |= SIM_SCGC5_PORTA | SIM_SCGC5_PORTB;
 
-  /* Set up D+ and D- as GPIOs (pin mux type 1), and enable IRQs */
-  PORTA->PCR[4] = (1 << 8) | (0xb << 16);
-  PORTB->PCR[0] = (1 << 8);
+  /* Set up D+ and D- as slow-slew GPIOs (pin mux type 1), and enable IRQs */
+  PORTA->PCR[4] = (1 << 8) | (0xb << 16) | (1 << 2);
+  PORTB->PCR[0] = (1 << 8) | (1 << 2);
 
   usbMacInit(usbMacDefault(), &hid_link);
   usbPhyInit(&defaultUsbPhy, usbMacDefault());
