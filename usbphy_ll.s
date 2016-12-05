@@ -682,7 +682,7 @@ usb_phy_write__stuff_out:
   b usb_phy_write__done_stuffing_bit
 
 usb_write__eof:
-  bl usb_phy__wait_13_cycles
+  bl usb_phy__wait_17_cycles
   bl usb_phy_write__state_se0
   bl usb_phy_write__state_se0
 
@@ -711,7 +711,6 @@ usb_write__eof:
   add sp, #8                        // Restore stack pointer.
 
   /* Now, set both lines back to INPUT */
-
   /* Set D+ line to INPUT */
   ldr wtmp1, [wusbphy, #dpDAddr]    // Get the direction address
   ldr wtmp2, [wtmp1]                // Get the direction value
