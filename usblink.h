@@ -140,7 +140,6 @@ struct USBLink {
   usb_get_buffer_t          getReceiveBuffer;
   usb_get_buffer_t          getSendBuffer;
   usb_data_in_t             receiveData;
-  usb_data_out_t            sendData;
   void                     *data;
   struct USBMAC            *mac;
 } __attribute__((packed, aligned(4)));

@@ -10,8 +10,8 @@
    *
    * Exports the following functions:
    *
-   *    int usbPhyReadI(USBPhy *phy, uint8_t buffer[11], uint32_t scratch[3])
-   *    void usbPhyWriteI(USBPhy *phy, uint8_t buffer[11], uint32_t count)
+   *    int usbPhyReadI(USBPhy *phy, uint8_t buffer[11])
+   *    void usbPhyWriteI(USBPhy *phy, const uint8_t buffer[11], uint32_t count)
    *
    * Interrupts are disabled during this code, since it is time-critical.
    * Note that as a Kinetis "feature", jumps of more than 48 bytes can
@@ -143,7 +143,7 @@ usb_phy_read__se0:
   sub rretval, #4                   // Return -4
   pop {r2-r7,pc}
 
-/*int */usbPhyReadI/*(const USBPHY *phy, uint8_t samples[11])*/:
+/*int */usbPhyReadI/*(USBPHY *phy, uint8_t samples[11])*/:
   push {r2-r7,lr}
   mov r2, r8
   mov r3, r9
@@ -483,7 +483,7 @@ wstuff    .req r0   /* The last six bits, used for bit stuffing (reuses wusbphy)
 .thumb_func
 .global usbPhyWriteI
 .func usbPhyWriteI
-/*void */usbPhyWriteI/*(const USBPHY *phy, uint8_t buffer[11], uint32_t count)*/:
+/*void */usbPhyWriteI/*(USBPHY *phy, const uint8_t buffer[11], uint32_t count)*/:
   push {r3-r7,lr}
   mov r3, r8
   mov r4, r9

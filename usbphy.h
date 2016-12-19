@@ -3,6 +3,10 @@
 
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define PHY_READ_QUEUE_SIZE 16
 #define PHY_READ_QUEUE_MASK (PHY_READ_QUEUE_SIZE - 1)
 
@@ -74,5 +78,9 @@ void usbPhyDetach(struct USBPHY *phy);
 
 struct USBPHY *usbPhyDefaultPhy(void);
 struct USBPHY *usbPhyTestPhy(void);
+
+#ifdef __cplusplus
+};
+#endif
 
 #endif /* __USB_PHY_H__ */

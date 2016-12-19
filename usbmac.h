@@ -3,6 +3,10 @@
 
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 enum usb_pids {
   USB_PID_RESERVED = 0xf0,
   USB_PID_OUT = 0xe1,
@@ -133,5 +137,9 @@ struct USBPHY *usbMacPhy(struct USBMAC *mac);
 void usbMacTransferSuccess(struct USBMAC *mac);
 
 int usbMacSendData(struct USBMAC *mac, int epnum, const void *data, int count);
+
+#ifdef __cplusplus
+};
+#endif
 
 #endif /* __USB_MAC_H__ */

@@ -365,6 +365,7 @@ static void usb_mac_parse_data(struct USBMAC *mac,
   // The remote side sends an empty packet (with only a CRC16) to indicate END.
   if (count == 2) {
     mac->packet_type = packet_type_none;
+    mac->data_buffer = 0;
   }
 }
 
@@ -375,7 +376,7 @@ int usbMacProcess(struct USBMAC *mac,
   switch(packet[0]) {
   case USB_PID_SETUP:
     mac->packet_type = packet_type_setup;
-    mac->data_buffer = 1;
+    //mac->data_buffer = 0;
     usb_mac_parse_token(mac, packet + 1);
     break;
 
@@ -391,6 +392,7 @@ int usbMacProcess(struct USBMAC *mac,
 
   case USB_PID_OUT:
     if (mac->packet_type == packet_type_none) {
+      //mac->data_buffer = 0;
       mac->packet_type = packet_type_out;
       usb_mac_parse_token(mac, packet + 1);
       mac->tok_pos = 0;
