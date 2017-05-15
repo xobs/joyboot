@@ -1,8 +1,6 @@
 #include <string.h>
 
-#include "usbphy.h"
-#include "usbmac.h"
-#include "usblink.h"
+#include "grainuum.h"
 #include "kl17.h"
 #include "flash.h"
 
@@ -17,7 +15,7 @@
 #define FLASH_PROTECTED_AREA_OFFSET 0
 #define FLASH_PROTECTED_AREA_SIZE 8192
 
-static struct USBPHY defaultUsbPhy = {
+static struct GrainuumUSB defaultUsbPhy = {
   /* PTB0 */
   .usbdnIAddr = (uint32_t)&FGPIOB->PDIR,
   .usbdnSAddr = (uint32_t)&FGPIOB->PSOR,
@@ -35,17 +33,14 @@ static struct USBPHY defaultUsbPhy = {
   .usbdpShift = 4,
 };
 
-void set_usb_config_num(struct USBLink *link, int configNum)
+void set_usb_config_num(struct GrainuumUSB *usb, int configNum)
 {
-  (void)link;
+  (void)usb;
   (void)configNum;
   ;
 }
 
-//static const uint8_t kbd_class_descriptor[] = {
-//};
-
-static const uint8_t class_descriptor[] = {
+static const uint8_t hid_report_descriptor[] = {
   #if 0
   0x05, 0x01, /* USAGE_PAGE (Generic Desktop)           */
   0x09, 0x06, /* USAGE (Keyboard)                       */
@@ -189,8 +184,8 @@ static const struct usb_configuration_descriptor configuration_descriptor = {
     /*  uint8_t  bCountryCode;            */ 0,
     /*  uint8_t  bNumDescriptors;         */ 1, /* We have only one REPORT */
     /*  uint8_t  bReportDescriptorType;   */ DT_HID_REPORT,
-    /*  uint16_t wReportDescriptorLength; */ sizeof(class_descriptor),
-                                             sizeof(class_descriptor) >> 8,
+    /*  uint16_t wReportDescriptorLength; */ sizeof(hid_report_descriptor),
+                                             sizeof(hid_report_descriptor) >> 8,
     /* }                                  */
 
     /* struct usb_endpoint_descriptor { */
@@ -243,14 +238,14 @@ static int send_string_descriptor(const char *str, const void **data)
   return str_buf[0];
 }
 
-static int get_string_descriptor(struct USBLink *link,
+static int get_string_descriptor(struct GrainuumUSB *usb,
                                  uint32_t num,
                                  const void **data)
 {
 
   static const uint8_t en_us[] = {0x04, DT_STRING, 0x09, 0x04};
 
-  (void)link;
+  (void)usb;
 
   if (num == 0) {
     *data = en_us;
@@ -278,12 +273,12 @@ static int get_string_descriptor(struct USBLink *link,
   return 0;
 }
 
-static int get_device_descriptor(struct USBLink *link,
+static int get_device_descriptor(struct GrainuumUSB *usb,
                                  uint32_t num,
                                  const void **data)
 {
 
-  (void)link;
+  (void)usb;
 
   if (num == 0) {
     *data = &device_descriptor;
@@ -292,27 +287,27 @@ static int get_device_descriptor(struct USBLink *link,
   return 0;
 }
 
-static int get_class_descriptor(struct USBLink *link,
-                                uint32_t num,
-                                const void **data)
+static int get_hid_report_descriptor(struct GrainuumUSB *usb,
+                                     uint32_t num,
+                                     const void **data)
 {
 
-  (void)link;
+  (void)usb;
 
   if (num == 0) {
-    *data = &class_descriptor;
-    return sizeof(class_descriptor);
+    *data = &hid_report_descriptor;
+    return sizeof(hid_report_descriptor);
   }
 
   return 0;
 }
 
-static int get_configuration_descriptor(struct USBLink *link,
+static int get_configuration_descriptor(struct GrainuumUSB *usb,
                                         uint32_t num,
                                         const void **data)
 {
 
-  (void)link;
+  (void)usb;
 
   if (num == 0) {
     *data = &configuration_descriptor;
@@ -321,21 +316,26 @@ static int get_configuration_descriptor(struct USBLink *link,
   return 0;
 }
 
-static int get_default_descriptor(struct USBLink *link,
-                                  const struct usb_mac_setup_packet *setup,
-                                  const void **data)
+static int get_descriptor(struct GrainuumUSB *usb,
+                          const void *packet,
+                          const void **response)
 {
-  (void)link;
-  (void)setup;
-  (void)data;
 
-  /*
-  if (setup->bmRequestType == 0xa1) {
-    static uint8_t dumb_features[] = {0x01, 0x23, 0x45};
-    *data = dumb_features;
-    return sizeof(dumb_features);
+  const struct usb_setup_packet *setup = packet;
+
+  switch (setup->wValueH) {
+  case DT_DEVICE:
+    return get_device_descriptor(usb, setup->wValueL, response);
+
+  case DT_STRING:
+    return get_string_descriptor(usb, setup->wValueL, response);
+
+  case DT_CONFIGURATION:
+    return get_configuration_descriptor(usb, setup->wValueL, response);
+
+  case DT_HID_REPORT:
+    return get_hid_report_descriptor(usb, setup->wValueL, response);
   }
-  */
 
   return 0;
 }
@@ -345,11 +345,11 @@ static uint8_t rx_buffer_head;
 static uint8_t rx_buffer_tail;
 
 uint32_t rx_buffer_queries = 0;
-static void * get_usb_rx_buffer(struct USBLink *link,
+static void * get_usb_rx_buffer(struct GrainuumUSB *usb,
                                 uint8_t epNum,
                                 int32_t *size)
 {
-  (void)link;
+  (void)usb;
   (void)epNum;
 
   if (size)
@@ -358,29 +358,12 @@ static void * get_usb_rx_buffer(struct USBLink *link,
   return rx_buffer[rx_buffer_head];
 }
 
-static void *ep2_buffer;
-static uint32_t ep2_buffer_size;
-
-static void * get_usb_tx_buffer(struct USBLink *link, uint8_t epNum, int32_t *size)
-{
-  (void)link;
-  (void)epNum;
-
-  if (epNum == 2) {
-    if (size)
-      *size = ep2_buffer_size;
-    return ep2_buffer;
-  }
-
-  return NULL;
-}
-
-static int received_data(struct USBLink *link,
+static int received_data(struct GrainuumUSB *usb,
                          uint8_t epNum,
                          uint32_t bytes,
                          const void *data)
 {
-  (void)link;
+  (void)usb;
   (void)epNum;
   (void)bytes;
   (void)data;
@@ -394,35 +377,56 @@ static int received_data(struct USBLink *link,
   return 0;
 }
 
-static int send_data_finished(struct USBLink *link, uint8_t epNum, const void *data)
+static int send_data_finished(struct GrainuumUSB *usb, int result)
 {
-  (void)link;
-  (void)epNum;
-  (void)data;
+  (void)usb;
+  (void)result;
 
   return 0;
 }
 
-static struct USBLink hid_link = {
-  .getStringDescriptor        = get_string_descriptor,
-  .getDeviceDescriptor        = get_device_descriptor,
-  .getConfigurationDescriptor = get_configuration_descriptor,
-  .getClassDescriptor         = get_class_descriptor,
-  .getDescriptor              = get_default_descriptor,
-  .setConfigNum               = set_usb_config_num,
-  .getSendBuffer              = get_usb_tx_buffer,
+static struct GrainuumConfig hid_link = {
+  .getDescriptor              = get_descriptor,
   .getReceiveBuffer           = get_usb_rx_buffer,
-  .sendData                   = send_data_finished,
   .receiveData                = received_data,
+  .sendDataFinished           = send_data_finished,
+  .setConfigNum               = set_usb_config_num,
 };
 
+static GRAINUUM_BUFFER(phy_queue, 4);
 
 void VectorB8(void)
 {
-  usbCaptureI(&defaultUsbPhy);
+  grainuumCaptureI(&defaultUsbPhy, GRAINUUM_BUFFER_ENTRY(phy_queue));
 
   /* Clear all pending interrupts on this port. */
   PORTA->ISFR = 0xFFFFFFFF;
+}
+
+void grainuumReceivePacket(struct GrainuumUSB *usb)
+{
+  (void)usb;
+  GRAINUUM_BUFFER_ADVANCE(phy_queue);
+}
+
+void grainuumInitPre(struct GrainuumUSB *usb)
+{
+  (void)usb;
+  GRAINUUM_BUFFER_INIT(phy_queue);
+}
+
+static void process_next_usb_event(struct GrainuumUSB *usb) {
+  if (!GRAINUUM_BUFFER_IS_EMPTY(phy_queue)) {
+    uint8_t *in_ptr = (uint8_t *)GRAINUUM_BUFFER_TOP(phy_queue);
+
+    // Advance to the next packet (allowing us to be reentrant)
+    GRAINUUM_BUFFER_REMOVE(phy_queue);
+
+    // Process the current packet
+    grainuumProcess(usb, in_ptr);
+
+    return;
+  }
 }
 
 int done;
@@ -557,9 +561,7 @@ int updateRx(void)
   PORTA->PCR[4] = (1 << 8) | (0xb << 16) | (1 << 2);
   PORTB->PCR[0] = (1 << 8) | (1 << 2);
 
-  usbMacInit(usbMacDefault(), &hid_link);
-  usbPhyInit(&defaultUsbPhy, usbMacDefault());
-  hid_link.mac = usbMacDefault();
+  grainuumInit(&defaultUsbPhy, &hid_link);
 
   {
     int i;
@@ -575,10 +577,10 @@ int updateRx(void)
   NVIC_EnableIRQ(30);
   __enable_irq();
 
-  usbPhyAttach(&defaultUsbPhy);
+  grainuumConnect(&defaultUsbPhy);
 
   while (!done) {
-    usbPhyProcessNextEvent(&defaultUsbPhy);
+    process_next_usb_event(&defaultUsbPhy);
 
     // If the rx_buffer_head has advnaced, then we have data to process in EP2
     if (rx_buffer_head != rx_buffer_tail) {
@@ -600,7 +602,7 @@ int updateRx(void)
       }
 
       // Advance the packet number only if this packet was sent successfully
-      if (!usbMacSendData(defaultUsbPhy.mac, 2, &result_pkt, sizeof(result_pkt))) {
+      if (!grainuumSendData(&defaultUsbPhy, 2, &result_pkt, sizeof(result_pkt))) {
         rx_buffer_tail = (rx_buffer_tail + 1) & (NUM_BUFFERS - 1);
       }
     }
