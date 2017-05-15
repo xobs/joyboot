@@ -27,11 +27,113 @@
 #define PALAWAN_TX_VALUE_4 65483
 #define PALAWAN_TX_VALUE_4_PAIR 65127
 
+#define KINETIS_MCG_FLL_DMX32       1           /* Fine-tune for 32.768 kHz */
+#define KINETIS_MCG_FLL_DRS         1           /* 1464x FLL factor */
+#define KINETIS_MCG_FLL_OUTDIV1     1           /* Divide 48 MHz FLL by 1 => 48 MHz */
+#define KINETIS_MCG_FLL_OUTDIV4     2           /* Divide OUTDIV1 output by 2 => 24 MHz */
+#define KINETIS_SYSCLK_FREQUENCY    47972352UL  /* 32.768 kHz * 1464 (~48 MHz) */
+
 static enum palawan_model _model;
 
-void kl1x_clock_init(void);
+/**
+ * @brief   KL2x clocks and PLL initialization.
+ * @note    All the involved constants come from the file @p board.h.
+ * @note    This function should be invoked just after the system reset.
+ *
+ * @special
+ */
+void kl02_clk_init(void) {
+#if !KINETIS_NO_INIT
+  /* Disable COP watchdog */
+  SIM->COPC = 0;
+
+  /* Enable PORTA and PORGB */
+  SIM->SCGC5 |= SIM_SCGC5_PORTA | SIM_SCGC5_PORTB;
+
+  /* --- MCG mode: FEI (default out of reset) ---
+     f_MCGOUTCLK = f_int * F
+     F is the FLL factor selected by C4[DRST_DRS] and C4[DMX32] bits.
+     Typical f_MCGOUTCLK = 21 MHz immediately after reset.
+     C4[DMX32]=0 and C4[DRST_DRS]=00  =>  FLL factor=640.
+     C3[SCTRIM] and C4[SCFTRIM] factory trim values apply to f_int. */
+
+  /* System oscillator drives 32 kHz clock (OSC32KSEL=0) */
+  //  SIM->SOPT1 &= ~SIM_SOPT1_OSC32KSEL_MASK;
+
+  /*
+   * FLL Enabled External (FEE) MCG Mode
+   * 24 MHz core, 12 MHz bus - using 32.768 kHz crystal with FLL.
+   * f_MCGOUTCLK = (f_ext / FLL_R) * F
+   *             = (32.768 kHz ) *
+   *  FLL_R is the reference divider selected by C1[FRDIV]
+   *  F is the FLL factor selected by C4[DRST_DRS] and C4[DMX32].
+   *
+   * Then the core/system and bus/flash clocks are divided:
+   *   f_SYS = f_MCGOUTCLK / OUTDIV1 = 48 MHz / 1 = 48 MHz
+   *   f_BUS = f_MCGOUTCLK / OUTDIV1 / OUTDIV4 =  MHz / 4 = 24 MHz
+   */
+
+  SIM->SOPT2 =
+          SIM_SOPT2_TPMSRC(1);  /* MCGFLLCLK clock or MCGPLLCLK/2 */
+          /* PLLFLLSEL=0 -> MCGFLLCLK */
+
+  /* The MCGOUTCLK is divided by OUTDIV1 and OUTDIV4:
+   * OUTDIV1 (divider for core/system and bus/flash clock)
+   * OUTDIV4 (additional divider for bus/flash clock) */
+  SIM->CLKDIV1 =
+          SIM_CLKDIV1_OUTDIV1(KINETIS_MCG_FLL_OUTDIV1 - 1) |
+          SIM_CLKDIV1_OUTDIV4(KINETIS_MCG_FLL_OUTDIV4 - 1);
+
+  /* EXTAL0 and XTAL0 */
+  //  PORTA->PCR[18] &= ~0x01000700; /* Set PA18 to analog (default) */  // defaults should already be good
+  //  PORTA->PCR[19] &= ~0x01000700; /* Set PA19 to analog (default) */
+
+  OSC0->CR = 0xC;
+
+  /* From KL25P80M48SF0RM section 24.5.1.1 "Initializing the MCG". */
+  /* To change from FEI mode to FEE mode: */
+  /* (1) Select the external clock source in C2 register.
+         Use low-power OSC mode (HGO0=0) which enables internal feedback
+         resistor, for 32.768 kHz crystal configuration.  */
+  MCG->C2 =
+          MCG_C2_RANGE0(0) |  /* low frequency range (<= 40 kHz) */
+          MCG_C2_EREFS0;      /* external reference (using a crystal) */
+  /* (2) Write to C1 to select the clock mode. */
+  MCG->C1 = /* Clear the IREFS bit to switch to the external reference. */
+          MCG_C1_CLKS_FLLPLL |  /* Use FLL for system clock, MCGCLKOUT. */
+          MCG_C1_FRDIV(0);      /* Don't divide 32kHz ERCLK FLL reference. */
+  MCG->C6 = 0;  /* PLLS=0: Select FLL as MCG source, not PLL */
+
+  /* Loop until S[OSCINIT0] is 1, indicating the
+     crystal selected by C2[EREFS0] has been initialized. */
+  while ((MCG->S & MCG_S_OSCINIT0) == 0)
+    ;
+  /* Loop until S[IREFST] is 0, indicating the
+     external reference is the current reference clock source. */
+  while ((MCG->S & MCG_S_IREFST) != 0)
+    ;  /* Wait until external reference clock is FLL reference. */
+  /* (1)(e) Loop until S[CLKST] indicates FLL feeds MCGOUTCLK. */
+  while ((MCG->S & MCG_S_CLKST_MASK) != MCG_S_CLKST_FLL)
+    ;  /* Wait until FLL has been selected. */
+
+  /* --- MCG mode: FEE --- */
+  /* Set frequency range for DCO output (MCGFLLCLK). */
+  MCG->C4 = (KINETIS_MCG_FLL_DMX32 ? MCG_C4_DMX32 : 0) |
+            MCG_C4_DRST_DRS(KINETIS_MCG_FLL_DRS);
+
+  /* Wait for the FLL lock time; t[fll_acquire][max] = 1 ms */
+  /* TODO - not implemented - is it required? Freescale example code
+     seems to omit it. */
+
+#else
+  #error "Unimplemented"
+#endif /* !KINETIS_NO_INIT */
+}
 
 enum palawan_model palawanModel(void) {
+  /* The strapping resistors were wired up to a pin that can't do ADC */
+  return palawan_rx;
+#if 0
   /* Sample the strapping resistors, to determine model type */
   if ((_model != palawan_tx) && (_model != palawan_rx)) {
     uint16_t gain;
@@ -40,10 +142,10 @@ enum palawan_model palawanModel(void) {
     int resistance_max;
 
     /* Ungate PORTE, where the ADC we're using lives */
-    SIM->SCGC5 |= SIM_SCGC5_PORTE;
+    SIM->SCGC5 |= SIM_SCGC5_PORTB;
 
     /* Configure PTE30 to be an input pad */
-    PORTE->PCR[30] = PORTx_PCRn_MUX(0);
+    PORTB->PCR[12] = PORTx_PCRn_MUX(0);
 
     /* Ungate the ADC */
     SIM->SCGC6 |= SIM_SCGC6_ADC0;
@@ -140,28 +242,29 @@ enum palawan_model palawanModel(void) {
   }
 
     return _model;
+#endif
 }
 
 static void radio_reset(void) {
   if (palawanModel() == palawan_tx)
     GPIOA->PSOR = (1 << 4);
   else if (palawanModel() == palawan_rx)
-    GPIOE->PSOR = (1 << 19);
+    GPIOB->PSOR = (1 << 11);
 }
 
 static void radio_enable(void) {
   if (palawanModel() == palawan_tx)
     GPIOA->PCOR = (1 << 4);
   else if (palawanModel() == palawan_rx)
-    GPIOE->PCOR = (1 << 19);
+    GPIOB->PCOR = (1 << 11);
 }
 
 void spi_assert_cs(void) {
-  GPIOD->PCOR = (1 << 0);
+  GPIOA->PCOR = (1 << 5);
 }
 
 void spi_deassert_cs(void) {
-  GPIOD->PSOR = (1 << 0);
+  GPIOA->PSOR = (1 << 5);
 }
 
 void spi_read_status(void) {
@@ -175,14 +278,14 @@ void spi_read_status(void) {
  */
 void spi_xmit_byte_sync(uint8_t byte) {
   /* Send the byte */
-  SPI0->DL = byte;
+  SPI0->D = byte;
 
   /* Wait for the byte to be transmitted */
   while (!(SPI0->S & SPIx_S_SPTEF))
     asm("");
 
   /* Discard the response */
-  (void)SPI0->DL;
+  (void)SPI0->D;
 }
 
 /**
@@ -194,14 +297,14 @@ void spi_xmit_byte_sync(uint8_t byte) {
  */
 uint8_t spi_recv_byte_sync(void) {
   /* Send the byte */
-  SPI0->DL = 0;
+  SPI0->D = 0;
 
   /* Wait for the byte to be transmitted */
   while (!(SPI0->S & SPIx_S_SPRF))
     asm("");
 
   /* Discard the response */
-  return SPI0->DL;
+  return SPI0->D;
 }
 
 
@@ -301,7 +404,7 @@ static void early_init_radio(void) {
 
   /* Enable Reset GPIO and SPI PORT clocks by unblocking
    * PORTC, PORTD, and PORTE.*/
-  SIM->SCGC5 |= (SIM_SCGC5_PORTA | SIM_SCGC5_PORTC | SIM_SCGC5_PORTD | SIM_SCGC5_PORTE);
+  SIM->SCGC5 |= (SIM_SCGC5_PORTA | SIM_SCGC5_PORTB);
 
   /* Map Reset to a GPIO, which is looped from PTE19 back into
      the RESET_B_XCVR port.*/
@@ -310,25 +413,25 @@ static void early_init_radio(void) {
     PORTA->PCR[4] = PORTx_PCRn_MUX(1);
   }
   else if (palawanModel() == palawan_rx) {
-    GPIOE->PDDR |= ((uint32_t) 1 << 19);
-    PORTE->PCR[19] = PORTx_PCRn_MUX(1);
+    GPIOB->PDDR |= ((uint32_t) 1 << 11);
+    PORTB->PCR[11] = PORTx_PCRn_MUX(1);
   }
 
   /* Enable SPI clock.*/
   SIM->SCGC4 |= SIM_SCGC4_SPI0;
 
-  /* Mux PTD0 as a GPIO, since it's used for Chip Select.*/
-  GPIOD->PDDR |= ((uint32_t) 1 << 0);
-  PORTD->PCR[0] = PORTx_PCRn_MUX(1);
+  /* Mux PTA5 as a GPIO, since it's used for Chip Select.*/
+  GPIOA->PDDR |= ((uint32_t) 1 << 5);
+  PORTA->PCR[5] = PORTx_PCRn_MUX(1);
 
-  /* Mux PTC5 as SCK */
-  PORTC->PCR[5] = PORTx_PCRn_MUX(2);
+  /* Mux PTB0 as SCK */
+  PORTB->PCR[0] = PORTx_PCRn_MUX(3);
 
-  /* Mux PTC6 as MISO */
-  PORTC->PCR[6] = PORTx_PCRn_MUX(2);
+  /* Mux PTA6 as MISO */
+  PORTA->PCR[6] = PORTx_PCRn_MUX(3);
 
-  /* Mux PTC7 as MOSI */
-  PORTC->PCR[7] = PORTx_PCRn_MUX(2);
+  /* Mux PTA7 as MOSI */
+  PORTA->PCR[7] = PORTx_PCRn_MUX(3);
 
   /* Keep the radio in reset.*/
   radio_reset();
@@ -398,5 +501,5 @@ void __early_init(void) {
   /* 32Mhz/4 = 8 MHz CLKOUT.*/
   radio_configure_clko(RADIO_CLK_DIV1);
 
-  kl1x_clock_init();
+  kl02_clk_init();
 }

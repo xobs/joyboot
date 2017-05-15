@@ -48,7 +48,7 @@ typedef enum IRQn
   LPTMR0_IRQn                   = 28,
   Reserved2_IRQn                = 29,
   PINA_IRQn                     = 30,
-  PIND_IRQn                     = 31,
+  PINB_IRQn                     = 31,
 } IRQn_Type;
 
 /*
@@ -238,17 +238,14 @@ typedef struct
 
 typedef struct
 {
-  __IO uint8_t  S;
-  __IO uint8_t  BR;
-  __IO uint8_t  C2;
   __IO uint8_t  C1;
-  __IO uint8_t  ML;
-  __IO uint8_t  MH;
-  __IO uint8_t  DL;
-  __IO uint8_t  DH;
-       uint8_t  RESERVED1[2];
-  __IO uint8_t  CI;
-  __IO uint8_t  C3;
+  __IO uint8_t  C2;
+  __IO uint8_t  BR;
+  __IO uint8_t  S;
+       uint8_t  RESERVD1;
+  __IO uint8_t  D;
+       uint8_t  RESERVED2;
+  __IO uint8_t  M;
 } SPI_TypeDef;
 
 typedef struct

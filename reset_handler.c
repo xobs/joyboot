@@ -16,20 +16,24 @@ extern uint32_t *_vectors;
 static uint32_t ram_vectors[64] __attribute__ ((aligned (1024)));
 
 __attribute__ ((section(".startup")))
+void memcpy32(uint32_t *src, uint32_t *dest, uint32_t count) {
+  count /= sizeof(*src);
+  while (count--)
+    *dest++ = *src++;
+}
+
+__attribute__ ((section(".startup")))
 static void init_crt(void) {
 
   /* Relocate data and text sections to RAM */
-  uint32_t *src = &_eflash;
-  uint32_t *dest = &_sdtext;
-  while (dest < &_edtext)
-    *dest++ = *src++;
+  memcpy32(&_eflash, &_sdtext, (uint32_t)&_edtext - (uint32_t)&_sdtext);
 
   /* Clear BSS */
-  dest = &_sbss;
+  uint32_t *dest = &_sbss;
   while (dest < &_ebss) *dest++ = 0;
 
   /* Copy IVT to RAM */
-  src = (uint32_t *) &_vectors;
+  uint32_t *src = (uint32_t *) &_vectors;
   dest = &ram_vectors[0];
   while (dest <= &ram_vectors[63])
     *dest++ = *src++;

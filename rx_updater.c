@@ -21,16 +21,16 @@ static struct GrainuumUSB defaultUsbPhy = {
   .usbdnSAddr = (uint32_t)&FGPIOB->PSOR,
   .usbdnCAddr = (uint32_t)&FGPIOB->PCOR,
   .usbdnDAddr = (uint32_t)&FGPIOB->PDDR,
-  .usbdnMask  = (1 << 0),
-  .usbdnShift = 0,
+  .usbdnMask  = (1 << 5),
+  .usbdnShift = 5,
 
   /* PTA4 */
-  .usbdpIAddr = (uint32_t)&FGPIOA->PDIR,
-  .usbdpSAddr = (uint32_t)&FGPIOA->PSOR,
-  .usbdpCAddr = (uint32_t)&FGPIOA->PCOR,
-  .usbdpDAddr = (uint32_t)&FGPIOA->PDDR,
-  .usbdpMask  = (1 << 4),
-  .usbdpShift = 4,
+  .usbdpIAddr = (uint32_t)&FGPIOB->PDIR,
+  .usbdpSAddr = (uint32_t)&FGPIOB->PSOR,
+  .usbdpCAddr = (uint32_t)&FGPIOB->PCOR,
+  .usbdpDAddr = (uint32_t)&FGPIOB->PDDR,
+  .usbdpMask  = (1 << 6),
+  .usbdpShift = 6,
 };
 
 void set_usb_config_num(struct GrainuumUSB *usb, int configNum)
@@ -395,12 +395,12 @@ static struct GrainuumConfig hid_link = {
 
 static GRAINUUM_BUFFER(phy_queue, 4);
 
-void VectorB8(void)
+void VectorBC(void)
 {
   grainuumCaptureI(&defaultUsbPhy, GRAINUUM_BUFFER_ENTRY(phy_queue));
 
   /* Clear all pending interrupts on this port. */
-  PORTA->ISFR = 0xFFFFFFFF;
+  PORTB->ISFR = 0xFFFFFFFF;
 }
 
 void grainuumReceivePacket(struct GrainuumUSB *usb)
@@ -558,8 +558,8 @@ int updateRx(void)
   SIM->SCGC5 |= SIM_SCGC5_PORTA | SIM_SCGC5_PORTB;
 
   /* Set up D+ and D- as slow-slew GPIOs (pin mux type 1), and enable IRQs */
-  PORTA->PCR[4] = (1 << 8) | (0xb << 16) | (1 << 2);
-  PORTB->PCR[0] = (1 << 8) | (1 << 2);
+  PORTB->PCR[5] = (1 << 8) | (0xb << 16) | (1 << 2);
+  PORTB->PCR[6] = (1 << 8) | (1 << 2);
 
   grainuumInit(&defaultUsbPhy, &hid_link);
 
@@ -573,8 +573,8 @@ int updateRx(void)
     }
   }
 
-  /* Enable PORTA IRQ */
-  NVIC_EnableIRQ(30);
+  /* Enable PORTB IRQ */
+  NVIC_EnableIRQ(PINB_IRQn);
   __enable_irq();
 
   grainuumConnect(&defaultUsbPhy);

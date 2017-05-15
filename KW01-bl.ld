@@ -18,7 +18,7 @@
 */
 
 /*
- * KL25Z128 memory setup.
+ * KL02Z32 memory setup.
  */
 
 ENTRY(Reset_Handler)
@@ -27,8 +27,8 @@ MEMORY
 {
     bl_flash  :  org = 0x00000000,  len = 8k,
     storage   :  org = 0x00002000,  len = 2k,
-    app_flash :  org = 0x00002800,  len = 118k,
-    ram       :  org = 0x1FFFF000,  len = 16k
+    app_flash :  org = 0x00002800,  len = 16k,
+    ram       :  org = 0x1FFFFC00,  len = 4k
 }
 
 __ram_start__           = ORIGIN(ram);
@@ -43,6 +43,7 @@ SECTIONS
         *(.startup*)
         . = 0x400;
         KEEP(*(.flashconfig*))
+        *(.text*)
     } > bl_flash = 0xFF
     _eflash = .;
 
@@ -56,7 +57,6 @@ SECTIONS
     .dtext : AT (_eflash) {
         . = ALIGN(4);
         _sdtext = .;
-        *(.text*)
 	*(.ramtext*)
         *(.rodata*)
         *(.data*)
