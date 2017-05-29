@@ -26,11 +26,45 @@ static int test_boot_token()
   return boot_token.magic == 0x74624346;
 }
 
+static int button_held_down(void) {
+  int before;
+  int after;
+
+  /* Set PTB12 as a GPIO input, slow slew rate */
+  PORTB->PCR[12] = (1 << 8) | (1 << 2);
+
+  /* Set it as an input */
+  FGPIOB->PDDR &= ~(1 << 12);
+
+  /* If the pin isn't held down, don't enter the bootloader */
+  before = !(FGPIOB->PDIR & (1 << 12));
+  if (!before)
+    return 0;
+
+  /* Sample the pin before, then wait about 500ms and sample again */
+  {
+    int i;
+    for (i = 0; i < 500000; i++) {
+      int j;
+      for (j = 0; j < 77; j++) {
+        asm("");
+      }
+    }
+  }
+  after = !(FGPIOB->PDIR & (1 << 12));
+
+  if (!after)
+    return 0;
+
+  return 1;
+}
+
 enum bootloader_reason {
   NOT_ENTERING_BOOTLOADER,
   BOOT_TOKEN_PRESENT,
   BOOT_FAILED_TOO_MANY_TIMES,
   NO_PROGRAM_PRESENT,
+  BUTTON_HELD_DOWN,
 } bootloader_reason;
 
 static int should_enter_bootloader(void) {
@@ -48,6 +82,12 @@ static int should_enter_bootloader(void) {
   /* If the special magic number is present, enter the bootloader */
   if (test_boot_token()) {
     bootloader_reason = BOOT_TOKEN_PRESENT;
+    return 1;
+  }
+
+  /* If the user is holding the button down */
+  if (button_held_down()) {
+    bootloader_reason = BUTTON_HELD_DOWN;
     return 1;
   }
 
