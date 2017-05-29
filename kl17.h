@@ -308,6 +308,15 @@ typedef struct
   __IO uint8_t  PMSTAT;
 } SMC_TypeDef;
 
+typedef struct
+{
+  __IO uint8_t  SRS0;
+  __IO uint8_t  SRS1;
+       uint8_t  RESERVED1[2];
+  __IO uint8_t  RFPC;
+  __IO uint8_t  RFPW;
+} RCM_TypeDef;
+
 /****************************************************************/
 /*                  Peripheral memory map                       */
 /****************************************************************/
@@ -337,6 +346,7 @@ typedef struct
 #define LLWU_BASE               ((uint32_t)0x4007C000)
 #define PMC_BASE                ((uint32_t)0x4007D000)
 #define SMC_BASE                ((uint32_t)0x4007E000)
+#define RCM_BASE                ((uint32_t)0x4007F000)
 #define GPIOA_BASE              ((uint32_t)0x400FF000)
 #define GPIOB_BASE              ((uint32_t)0x400FF040)
 #define GPIOC_BASE              ((uint32_t)0x400FF080)
@@ -363,6 +373,7 @@ typedef struct
 #define LLWU                    ((LLWU_TypeDef  *)   LLWU_BASE)
 #define PMC                     ((PMC_TypeDef  *)    PMC_BASE)
 #define SMC                     ((SMC_TypeDef  *)    SMC_BASE)
+#define RCM                     ((RCM_TypeDef  *)    RCM_BASE)
 #define PORTA                   ((PORT_TypeDef  *)   PORTA_BASE)
 #define PORTB                   ((PORT_TypeDef  *)   PORTB_BASE)
 #define PORTC                   ((PORT_TypeDef  *)   PORTC_BASE)
@@ -1196,6 +1207,19 @@ typedef struct
 #define PMC_REGSC_ACKISO              ((uint8_t)0x8)    /*!< Acknowledge Isolation */
 #define PMC_REGSC_REGONS              ((uint8_t)0x4)    /*!< Regulator In Run Regulation Status */
 #define PMC_REGSC_BGBE                ((uint8_t)0x1)    /*!< Bandgap Buffer Enable */
+
+#define RCM_SRS0_POR                  ((uint8_t)1 << 7) /*!< Power-On Reset */
+#define RCM_SRS0_PIN                  ((uint8_t)1 << 6) /*!< External reset pin */
+#define RCM_SRS0_WDOG                 ((uint8_t)1 << 5) /*!< COP-timer watchdog hit */
+#define RCM_SRS0_LOC                  ((uint8_t)1 << 2) /*!< Loss-of-clock reset */
+#define RCM_SRS0_LVD                  ((uint8_t)1 << 1) /*!< Low-voltage detect */
+#define RCM_SRS0_WAKEUP               ((uint8_t)1 << 0) /*!< Low-leakage wakeup event */
+
+#define RCM_SRS1_SACKERR              ((uint8_t)1 << 5) /*!< Stop-acknowledge error */
+#define RCM_SRS1_MDM_AP               ((uint8_t)1 << 3) /*!< Debugger reset */
+#define RCM_SRS1_SW                   ((uint8_t)1 << 2) /*!< Software set SYSRESETREQ bit */
+#define RCM_SRS1_LOCKUP               ((uint8_t)1 << 1) /*!< Core detected a lockup */
+
 /****************************************************************/
 /*                                                              */
 /*             System Management Controller (SMC)               */
@@ -1340,16 +1364,12 @@ typedef struct
 
 static inline void watchdog_refresh(void)
 {
-  __disable_irq();
-  WDOG_REFRESH = 0xA602;
-  WDOG_REFRESH = 0xB480;
-  __enable_irq();
-}
+  // Service the watchdog timer, to prevent it from rebooting
+  SIM->SRVCOP = 0x55;
+  SIM->SRVCOP = 0xAA;
 
-static inline void watchdog_reboot(void)
-{
-  // Any invalid write to the WDOG registers will trigger an immediate reboot
-  WDOG_REFRESH = 0;
+  // Set the watchdog timer back to the default mode
+  SIM->COPC = 0xc;
 }
 
 #endif /* __KL17_H__ */

@@ -25,12 +25,14 @@ ENTRY(Reset_Handler)
 
 MEMORY
 {
-    bl_flash  :  org = 0x00000000,  len = 8k,
-    storage   :  org = 0x00002000,  len = 2k,
-    app_flash :  org = 0x00002800,  len = 16k,
-    ram       :  org = 0x1FFFFC00,  len = 4k
+    bl_flash   :  org = 0x00000000,  len = 8k,
+    storage    :  org = 0x00002000,  len = 2k,
+    app_flash  :  org = 0x00002800,  len = 16k,
+    ram        :  org = 0x1FFFFC00,  len = 4k
 }
 
+__app_start__           = ORIGIN(app_flash);
+__app_end__             = __app_start__ + LENGTH(app_flash);
 __ram_start__           = ORIGIN(ram);
 __ram_size__            = LENGTH(ram);
 __ram_end__             = __ram_start__ + __ram_size__;
@@ -52,12 +54,11 @@ SECTIONS
         *(.appvectors)
     } > app_flash = 0xFF
 
-
     /* Combined data and text, after relocation */
     .dtext : AT (_eflash) {
         . = ALIGN(4);
         _sdtext = .;
-	*(.ramtext*)
+        *(.ramtext*)
         *(.rodata*)
         *(.data*)
         . = ALIGN(4);
@@ -78,7 +79,7 @@ SECTIONS
         __bss_end = .;
     } > ram
 
-    __main_stack_end__ = ORIGIN(ram) + LENGTH(ram) - 4;
+    __main_stack_end__ = ORIGIN(ram) + LENGTH(ram) - 8;
     boot_token = __main_stack_end__;
 
     /DISCARD/ : {

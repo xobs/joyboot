@@ -7,7 +7,12 @@
 int updateRx(void);
 int updateTx(void);
 
-extern uint32_t boot_token;
+struct boot_token {
+  uint32_t magic;
+  uint32_t boot_count;
+};
+
+__attribute__((section("boot_token"))) extern struct boot_token boot_token;
 static __attribute__ ((section(".appvectors"))) uint32_t appVectors[64];
 
 static int test_boot_token()
@@ -18,11 +23,50 @@ static int test_boot_token()
    * is running.
    */
 
-  return boot_token == 0x74624346;
+  return boot_token.magic == 0x74624346;
 }
 
+enum bootloader_reason {
+  NOT_ENTERING_BOOTLOADER,
+  BOOT_TOKEN_PRESENT,
+  BOOT_FAILED_TOO_MANY_TIMES,
+  NO_PROGRAM_PRESENT,
+} bootloader_reason;
 
 static int should_enter_bootloader(void) {
+  extern uint32_t __ram_start__;
+  extern uint32_t __ram_end__;
+  extern uint32_t __app_start__;
+  extern uint32_t __app_end__;
+
+  /* Reset the boot token if we've just been powered up for the first time */
+  if (RCM->SRS0 & RCM_SRS0_POR) {
+    boot_token.magic = 0;
+    boot_token.boot_count = 0;
+  }
+
+  /* If the special magic number is present, enter the bootloader */
+  if (test_boot_token()) {
+    bootloader_reason = BOOT_TOKEN_PRESENT;
+    return 1;
+  }
+
+  /* If we've failed to boot many times, enter the bootloader */
+  if (boot_token.boot_count > 3) {
+    bootloader_reason = BOOT_FAILED_TOO_MANY_TIMES;
+    return 1;
+  }
+
+  /* Otherwise, if the application appears valid (i.e. stack is in a sane
+   * place, and the program counter is in flash,) boot to it */
+  if (((appVectors[0] >= (uint32_t)&__ram_start__) && (appVectors[0] <= (uint32_t)&__ram_end__))
+   && ((appVectors[1] >= (uint32_t)&__app_start__) && (appVectors[1] <= (uint32_t)&__app_end__))) {
+     bootloader_reason = NOT_ENTERING_BOOTLOADER;
+    return 0;
+   }
+
+  /* If there is no valid program, enter the bootloader */
+  bootloader_reason = NO_PROGRAM_PRESENT;
   return 1;
 }
 
@@ -32,11 +76,19 @@ static void boot_app(void) {
   __disable_irq();
   SCB->VTOR = (uint32_t) &appVectors[0];
 
+  // Switch the clock mode from FEE back to FEI
+  MCG->C1 = /* Clear the IREFS bit to switch to the external reference. */
+          MCG_C1_CLKS_FLLPLL |  /* Use FLL for system clock, MCGCLKOUT. */
+          MCG_C1_IRCLKEN     |  /* Enable the internal reference clock. */
+          MCG_C1_IREFS;         /* Use the internal reference clock. */
+  MCG->C6 = 0;  /* PLLS=0: Select FLL as MCG source, not PLL */
+
   // Refresh watchdog right before launching app
   watchdog_refresh();
 
   // Clear the boot token, so we don't repeatedly enter DFU mode.
-  boot_token = 0;
+  boot_token.magic = 0;
+  boot_token.boot_count++;
 
   asm volatile (
   "mov lr, %0 \n\t"
