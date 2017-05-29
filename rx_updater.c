@@ -16,21 +16,21 @@
 #define FLASH_PROTECTED_AREA_SIZE 8192
 
 static struct GrainuumUSB defaultUsbPhy = {
-  /* PTB0 */
+  /* PTB6 */
   .usbdnIAddr = (uint32_t)&FGPIOB->PDIR,
   .usbdnSAddr = (uint32_t)&FGPIOB->PSOR,
   .usbdnCAddr = (uint32_t)&FGPIOB->PCOR,
   .usbdnDAddr = (uint32_t)&FGPIOB->PDDR,
-  .usbdnMask  = (1 << 5),
-  .usbdnShift = 5,
+  .usbdnMask  = (1 << 6),
+  .usbdnShift = 6,
 
-  /* PTA4 */
+  /* PTB5 */
   .usbdpIAddr = (uint32_t)&FGPIOB->PDIR,
   .usbdpSAddr = (uint32_t)&FGPIOB->PSOR,
   .usbdpCAddr = (uint32_t)&FGPIOB->PCOR,
   .usbdpDAddr = (uint32_t)&FGPIOB->PDDR,
-  .usbdpMask  = (1 << 6),
-  .usbdpShift = 6,
+  .usbdpMask  = (1 << 5),
+  .usbdpShift = 5,
 };
 
 void set_usb_config_num(struct GrainuumUSB *usb, int configNum)
