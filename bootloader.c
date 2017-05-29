@@ -4,6 +4,14 @@
 #include "palawan.h"
 #include "radio.h"
 
+enum bootloader_reason {
+  NOT_ENTERING_BOOTLOADER,
+  BOOT_TOKEN_PRESENT,
+  BOOT_FAILED_TOO_MANY_TIMES,
+  NO_PROGRAM_PRESENT,
+  BUTTON_HELD_DOWN,
+} bootloader_reason;
+
 int updateRx(void);
 int updateTx(void);
 
@@ -58,14 +66,6 @@ static int button_held_down(void) {
 
   return 1;
 }
-
-enum bootloader_reason {
-  NOT_ENTERING_BOOTLOADER,
-  BOOT_TOKEN_PRESENT,
-  BOOT_FAILED_TOO_MANY_TIMES,
-  NO_PROGRAM_PRESENT,
-  BUTTON_HELD_DOWN,
-} bootloader_reason;
 
 static int should_enter_bootloader(void) {
   extern uint32_t __ram_start__;
