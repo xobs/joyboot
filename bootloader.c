@@ -23,8 +23,7 @@ struct boot_token {
 __attribute__((section("boot_token"))) extern struct boot_token boot_token;
 static __attribute__ ((section(".appvectors"))) uint32_t appVectors[64];
 
-static int test_boot_token()
-{
+static int test_boot_token(void) {
   /*
    * If we find a valid boot token in RAM, the application is asking us explicitly
    * to enter DFU mode. This is used to implement the DFU_DETACH command when the app
