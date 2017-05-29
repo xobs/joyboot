@@ -562,6 +562,7 @@ int updateRx(void)
   PORTB->PCR[6] = (1 << 8) | (1 << 2);
 
   grainuumInit(&defaultUsbPhy, &hid_link);
+  grainuumDisconnect(&defaultUsbPhy);
 
   {
     int i;
