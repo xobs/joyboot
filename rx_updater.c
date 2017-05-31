@@ -388,12 +388,34 @@ static void process_next_usb_event(struct GrainuumUSB *usb) {
 int done;
 int num_sent = 0;
 int num_failed = 0;
+static uint32_t erase_flash_address;
+static uint32_t erase_flash_count;
 
-static int do_erase_flash(struct bl_state *state, struct bl_pkt *result,
-                          uint32_t address, uint32_t count)
-{
+static int erase_flash_callback(struct bl_state *state, struct result_pkt *result, void *arg) {
+  (void)arg;
   int ret;
 
+  result->small = no_error;
+  ret = flashEraseSectors(erase_flash_address++, 1);
+  erase_flash_count--;
+
+  if (ret != F_ERR_OK) {
+    result->large = ret;
+    result->medium = erase_flash_address;
+    result->small = subsystem_error;
+    state->continue_function = NULL;
+    return 0;
+  }
+
+  // If there are no more sectors to update, finish up.
+  if (erase_flash_count <= 0)
+    return 0;
+  return 1;
+}
+
+static int do_erase_flash(struct bl_state *state, struct result_pkt *result,
+                          uint32_t address, uint32_t count)
+{
   // Make sure we're not overwriting the bootloader
   extern uint32_t __bl_size__;
   if ((address * FTFx_PSECTOR_SIZE < (uint32_t)&__bl_size__) && (state->flash_is_protected))
@@ -405,16 +427,11 @@ static int do_erase_flash(struct bl_state *state, struct bl_pkt *result,
   if ((address * FTFx_PSECTOR_SIZE + count * FTFx_PSECTOR_SIZE) > P_FLASH_SIZE)
     return address_out_of_range;
 
-  while (count--) {
-    ret = flashEraseSectors(address, 1);
+  erase_flash_address = address;
+  erase_flash_count = count;
+  state->continue_function = erase_flash_callback;
 
-    if (ret != F_ERR_OK) {
-      result->result.large = ret;
-      result->result.medium = address;
-      return subsystem_error;
-    }
-    process_next_usb_event(&defaultUsbPhy);
-  }
+  result->large = count;
 
   return no_error;
 }
@@ -620,7 +637,8 @@ static int process_one_packet(struct bl_state *state,
     return do_bootloader_info(state, &result->info);
 
   case erase_block:
-    return do_erase_flash(state, result, packet->erase_sector.offset, packet->erase_sector.count);
+    return do_erase_flash(state, &result->result,
+                    packet->erase_sector.offset, packet->erase_sector.count);
 
   case reboot_cmd:
     return do_reboot(state, &result->result, &packet->reboot);
@@ -632,7 +650,7 @@ static int process_one_packet(struct bl_state *state,
     return do_program_data(state, &result->result, &result->program);
 
   case erase_app:
-    return do_erase_flash(state, result,
+    return do_erase_flash(state, &result->result,
                           ((uint32_t)&__app_start__) / FTFx_PSECTOR_SIZE,
                           (((uint32_t)&__app_end__) - ((uint32_t)&__app_start__)) / FTFx_PSECTOR_SIZE);
 
@@ -655,6 +673,7 @@ int updateRx(void)
   struct bl_state state = {0};
   int last_packet_num = -1;
   static struct bl_pkt result_pkt = {0};
+  uint8_t last_cmd = 0;
 
   state.flash_is_protected = 1;
 
@@ -696,21 +715,39 @@ int updateRx(void)
       // as is the case here, handle it as a new packet.
       if (rx_buffer_tail != last_packet_num) {
         last_packet_num = rx_buffer_tail;
+        last_cmd = incoming_pkt->cmd;
 
         // Pack the sequence number and the 'result' command together
-        result_pkt.cmd = result_cmd | (incoming_pkt->cmd & 0xf0);
+        result_pkt.cmd = result_cmd | (last_cmd & 0xf0);
 
         unsigned int i;
         for (i = 0; i < sizeof(result_pkt.raw.data); i++)
           result_pkt.raw.data[i] = 0;
 
         result_pkt.result.small = process_one_packet(&state, &result_pkt, incoming_pkt);
+        if (state.continue_function)
+          result_pkt.cmd = ongoing_process_cmd | (last_cmd & 0xf0);
       }
 
       // Advance the packet number only if this packet was sent successfully
       if (!grainuumSendData(&defaultUsbPhy, 1, &result_pkt, sizeof(result_pkt))) {
         rx_buffer_tail = (rx_buffer_tail + 1) & (NUM_BUFFERS - 1);
       }
+    }
+
+    // If there is an ongoing process, run that function.
+    if (state.continue_function != NULL) {
+
+      // If the function returns zero, deregister it and send "finish".
+      if (!state.continue_function(&state, &result_pkt.result, state.continue_arg)) {
+        result_pkt.cmd = result_cmd | (last_cmd & 0xf0);
+        state.continue_function = NULL;
+      }
+      else
+        result_pkt.cmd = ongoing_process_cmd | (last_cmd & 0xf0);
+
+      grainuumDropData(&defaultUsbPhy);
+      grainuumSendData(&defaultUsbPhy, 1, &result_pkt, sizeof(result_pkt));
     }
   }
 

@@ -89,10 +89,16 @@ struct jump_to_address_pkt {
   uint32_t address;
 } PACKED;
 
+struct ongoing_pkt {
+  uint8_t  cmd;
+  uint16_t reserved;
+  uint32_t progress;
+} PACKED;
+
 struct result_pkt {
   uint8_t  small;
   uint16_t medium;
-  uint8_t  large;
+  uint32_t large;
 } PACKED;
 
 struct bl_pkt {
@@ -107,9 +113,11 @@ struct bl_pkt {
     struct read_write_pkt read_write;
     struct jump_to_address_pkt jump_to_address;
     struct reboot_pkt reboot;
+    struct ongoing_pkt ongoing;
     struct result_pkt result;
   } PACKED;
 } __attribute__((packed, aligned(4)));
+
 #undef PACKED
 
 enum bl_pkt_command {
@@ -123,6 +131,7 @@ enum bl_pkt_command {
   peek_poke_cmd = 8,
   echo_back_cmd = 9,
   reboot_cmd = 10,
+  ongoing_process_cmd = 14,
   result_cmd = 15,
 };
 
@@ -136,11 +145,14 @@ enum bl_pkt_result {
   size_not_valid = 6,
   key_not_valid = 7,
   flash_not_erased = 8,
+  command_ongoing = 9,
 };
 
 struct bl_state {
   uint32_t offset;
   uint32_t count;
+  int (*continue_function)(struct bl_state *state, struct result_pkt *result, void *arg);
+  void *continue_arg;
   union {
     uint8_t buffer[4];
     uint32_t buffer32;
