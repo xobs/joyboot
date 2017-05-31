@@ -35,7 +35,6 @@ static int kinetis_flash_cmd(uint8_t cmd, uint32_t addr,
   uint8_t fstat;
   int ret = F_ERR_OK;
 
-  __disable_irq();
   /* Wait for (optional) previous command to complete */
   while (!(readb(FTFx_FSTAT) & FTFx_FSTAT_CCIF))
     ;
@@ -65,7 +64,6 @@ static int kinetis_flash_cmd(uint8_t cmd, uint32_t addr,
   /* Check ACCERR and FPVIOL are zero in FSTAT */
   if (fstat & (FTFx_FSTAT_ACCERR | FTFx_FSTAT_FPVIOL | FTFx_FSTAT_MGSTAT0))
     ret = F_ERR_LOWLEVEL;
-  __enable_irq();
 
   return ret;
 }

@@ -34,7 +34,7 @@ static struct GrainuumUSB defaultUsbPhy = {
   .usbdpShift = 5,
 };
 
-void set_usb_config_num(struct GrainuumUSB *usb, int configNum)
+static void set_usb_config_num(struct GrainuumUSB *usb, int configNum)
 {
   (void)usb;
   (void)configNum;
@@ -88,39 +88,6 @@ static const struct usb_configuration_descriptor configuration_descriptor = {
   .bmAttributes = 0x80,       /* Remote wakeup not supported */
   .bMaxPower = 100/2,         /* 100 mA (in 2-mA units) */
   .data = {
-#if 0
-    /* struct usb_interface_descriptor { */
-    /*  uint8_t bLength;            */ 9,
-    /*  uint8_t bDescriptorType;    */ DT_INTERFACE,
-    /*  uint8_t bInterfaceNumber;   */ 0,
-    /*  uint8_t bAlternateSetting;  */ 0,
-    /*  uint8_t bNumEndpoints;      */ 1, /* One extra EPs */
-    /*  uint8_t bInterfaceClass;    */ 3, /* HID class */
-    /*  uint8_t bInterfaceSubclass; */ 1, /* Boot Device subclass */
-    /*  uint8_t bInterfaceProtocol; */ 1, /* 1 == keyboard, 2 == mouse */
-    /*  uint8_t iInterface;         */ 6, /* String index #6 */
-    /* }*/
-
-    /* struct usb_hid_descriptor {        */
-    /*  uint8_t  bLength;                 */ 9,
-    /*  uint8_t  bDescriptorType;         */ DT_HID,
-    /*  uint16_t bcdHID;                  */ 0x11, 0x01,
-    /*  uint8_t  bCountryCode;            */ 0,
-    /*  uint8_t  bNumDescriptors;         */ 1, /* We have only one REPORT */
-    /*  uint8_t  bReportDescriptorType;   */ DT_HID_REPORT,
-    /*  uint16_t wReportDescriptorLength; */ sizeof(class_descriptor),
-                                             sizeof(class_descriptor) >> 8,
-    /* }                                  */
-
-    /* struct usb_endpoint_descriptor { */
-    /*  uint8_t  bLength;             */ 7,
-    /*  uint8_t  bDescriptorType;     */ DT_ENDPOINT,
-    /*  uint8_t  bEndpointAddress;    */ 0x81,  /* EP1 (IN) */
-    /*  uint8_t  bmAttributes;        */ 3,     /* Interrupt */
-    /*  uint16_t wMaxPacketSize;      */ 0x08, 0x00,
-    /*  uint8_t  bInterval;           */ EP_INTERVAL_MS, /* Every 6 ms */
-    /* }                              */
-#endif
     /* struct usb_interface_descriptor { */
     /*  uint8_t bLength;            */ 9,
     /*  uint8_t bDescriptorType;    */ DT_INTERFACE,
@@ -166,7 +133,7 @@ static const struct usb_configuration_descriptor configuration_descriptor = {
 
 #define USB_STR_BUF_LEN 64
 
-uint32_t str_buf_storage[USB_STR_BUF_LEN / sizeof(uint32_t)];
+static uint32_t str_buf_storage[USB_STR_BUF_LEN / sizeof(uint32_t)];
 static int send_string_descriptor(const char *str, const void **data)
 {
   int len;
@@ -297,11 +264,11 @@ static int get_descriptor(struct GrainuumUSB *usb,
   return 0;
 }
 
-uint32_t rx_buffer[NUM_BUFFERS][BUFFER_SIZE / sizeof(uint32_t)];
+static uint32_t rx_buffer[NUM_BUFFERS][BUFFER_SIZE / sizeof(uint32_t)];
 static uint8_t rx_buffer_head;
 static uint8_t rx_buffer_tail;
 
-uint32_t rx_buffer_queries = 0;
+static uint32_t rx_buffer_queries = 0;
 static void * get_usb_rx_buffer(struct GrainuumUSB *usb,
                                 uint8_t epNum,
                                 int32_t *size)
@@ -385,9 +352,7 @@ static void process_next_usb_event(struct GrainuumUSB *usb) {
   }
 }
 
-int done;
-int num_sent = 0;
-int num_failed = 0;
+static int done;
 static uint32_t erase_flash_address;
 static uint32_t erase_flash_count;
 
@@ -396,7 +361,9 @@ static int erase_flash_callback(struct bl_state *state, struct result_pkt *resul
   int ret;
 
   result->small = no_error;
+  __disable_irq();
   ret = flashEraseSectors(erase_flash_address++, 1);
+  __enable_irq();
   erase_flash_count--;
 
   if (ret != F_ERR_OK) {
@@ -668,11 +635,13 @@ static int process_one_packet(struct bl_state *state,
   }
 }
 
+int hits;
+int misses;
 int updateRx(void)
 {
   struct bl_state state = {0};
+  struct bl_pkt result_pkt = {0};
   int last_packet_num = -1;
-  static struct bl_pkt result_pkt = {0};
   uint8_t last_cmd = 0;
 
   state.flash_is_protected = 1;
@@ -682,7 +651,7 @@ int updateRx(void)
 
   /* Set up D+ and D- as slow-slew GPIOs (pin mux type 1), and enable IRQs */
   PORTB->PCR[5] = (1 << 8) | (0xb << 16) | (1 << 2);
-  PORTB->PCR[6] = (1 << 8) | (1 << 2);
+  PORTB->PCR[6] = (1 << 8) | (0xb << 16) | (1 << 2);
 
   grainuumInit(&defaultUsbPhy, &hid_link);
   grainuumDisconnect(&defaultUsbPhy);
@@ -735,6 +704,17 @@ int updateRx(void)
       }
     }
 
+  {
+    int i;
+    for (i = 0; i < 1000; i++) {
+      int j;
+      for (j = 0; j < 77; j++) {
+        asm("");
+      }
+    }
+  }
+
+
     // If there is an ongoing process, run that function.
     if (state.continue_function != NULL) {
 
@@ -746,8 +726,11 @@ int updateRx(void)
       else
         result_pkt.cmd = ongoing_process_cmd | (last_cmd & 0xf0);
 
-      grainuumDropData(&defaultUsbPhy);
-      grainuumSendData(&defaultUsbPhy, 1, &result_pkt, sizeof(result_pkt));
+      //grainuumDropData(&defaultUsbPhy);
+      if (grainuumSendData(&defaultUsbPhy, 1, &result_pkt, sizeof(result_pkt)))
+        misses++;
+      else
+        hits++;
     }
   }
 
