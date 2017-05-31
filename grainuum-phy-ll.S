@@ -163,6 +163,19 @@ rdniaddr .req r12 /* Pointer to D- sample address */
 .func usbPhyReadI
 .global usbPhyReadI
 
+usb_phy_read__se0:
+  add sp, #12
+  pop {r2-r6}
+  mov r8, r2
+  mov r9, r3
+  mov r10, r4
+  mov r11, r5
+  mov r12, r6
+
+  mov rretval, #0
+  sub rretval, #4                   // Return -4
+  pop {r2-r7,pc}
+
 /*int */usbPhyReadI/*(struct GrainuumUSB *usb, uint8_t samples[11])*/:
   push {r2-r7,lr}
   mov r2, r8
@@ -207,9 +220,6 @@ rdniaddr .req r12 /* Pointer to D- sample address */
   // The loop is 4 cycles on a failure.  One
   // pulse is 32 cycles.  Therefore, loop up
   // to 8 times before giving up.
-  ldr rval, [rreg]                  // Sample D-, to watch for it flipping
-  and rval, rmash                   // Mask off the interesting bit
-  mov rlastval, rval                // Save the bit for use in looking for sync
 .rept 8
   ldr rval, [rreg]                  // Sample USBDP
   and rval, rmash                   // Mask off the interesting bit
@@ -218,28 +228,9 @@ rdniaddr .req r12 /* Pointer to D- sample address */
 .endr
   b usb_phy_read__timeout           // It never changed, so return "timeout".
 
-  /* Stick this here so that it's within a jump window from the start */
-usb_phy_read__se0:
-  add sp, #12
-  pop {r2-r6}
-  mov r8, r2
-  mov r9, r3
-  mov r10, r4
-  mov r11, r5
-  mov r12, r6
-
-  mov rretval, #0
-  sub rretval, #4                   // Return -4
-  pop {r2-r7,pc}
-
 usb_phy_read__sync_wait:
   // Move us away from the start of the pulse, to avoid transition errors.
-  nop
-  nop
-  nop
-  nop
-  nop
-  nop
+  bl usb_phy__wait_5_cycles
 
   // Wait for the end-of-header sync pulse, which is when the value
   // repeats itself.  This is the "KK" in the KJKJKJKK training sequence.
@@ -283,12 +274,13 @@ usb_phy_read__start_reading_usb:
   mov rdpshift, rreg
   // 9
 
-  // At this point, we're almost done with the last bit of the header.  We now
-  // need to wait it out, and position ourselves towards the start of the next
-  // packet.
-  // We're about 20 cycles in (give-or-take about 5 cycles) out of 32, so delay
-  // long enough to sample the middle of the next bit.
-  bl usb_phy__wait_16_cycles
+  nop
+  nop
+  nop
+  nop
+  nop
+  nop
+  nop
 
 usb_phy_read__get_usb_bit:
   mov rval, rdpiaddr                  // Get the address of the D+ input bank.
@@ -363,7 +355,7 @@ usb_phy_read__check_unstuff:
   bne usb_phy_read__get_usb_bit
   // 2 (if branch taken, 1 if unstuffing needs to happen)
 
-usb_phy_read__usb_unstuff:
+usb_phy_read__unstuff:
   nop                                 // We get here when the current bit has
                                       // one more clock cycle left.  Add a nop
                                       // just to make the cycle-counting easier.
@@ -372,7 +364,8 @@ usb_phy_read__usb_unstuff:
   // NOTE that we don't increment "rcounter" here.
   mov runstuff, rone                  // We're skipping over one bit, which
                                       // results in a new run of one.
-  // 1
+  add runstuff, rone
+  // 2
 
   /* Invert the last value, since a false 0 was added to the stream */
   mov rreg, rlastval                  // Read the current last val into a lo reg.
@@ -387,7 +380,7 @@ usb_phy_read__usb_unstuff:
   bgt usb_phy_read__exit              // Exit if so
   // 2
 
-  bl usb_phy__wait_23_cycles
+  bl usb_phy__wait_22_cycles
 
   b usb_phy_read__get_usb_bit
   // 2
@@ -439,6 +432,11 @@ usb_phy_read__timeout:
 
 
 
+usb_phy__wait_32_cycles: nop
+usb_phy__wait_31_cycles: nop
+usb_phy__wait_30_cycles: nop
+usb_phy__wait_29_cycles: nop
+usb_phy__wait_28_cycles: nop
 usb_phy__wait_27_cycles: nop
 usb_phy__wait_26_cycles: nop
 usb_phy__wait_25_cycles: nop
@@ -460,7 +458,11 @@ usb_phy__wait_10_cycles: nop
 usb_phy__wait_9_cycles:  nop
 usb_phy__wait_8_cycles:  nop
 usb_phy__wait_7_cycles:  nop
-usb_phy__wait_6_cycles:  mov pc, lr
+usb_phy__wait_6_cycles:  nop
+usb_phy__wait_5_cycles:  mov pc, lr
+
+
+
 
 
 /*
@@ -597,8 +599,8 @@ usb_phy_write__get_first_packet:
   // 2
 
   // usb start-of-frame header //
-  bl usb_phy__wait_8_cycles
   /*bl usb_phy_write__state_k // K state entered above already */
+  bl usb_phy__wait_6_cycles
   bl usb_phy_write__state_j
   bl usb_phy_write__state_k
   bl usb_phy_write__state_j
@@ -686,11 +688,7 @@ usb_phy_write__continue_byte:
 usb_phy_write__stuff_bit:
   /* When we get here, we are already into the packet. */
 // Need 18 cycles until packet is written
-  nop
-  nop
-  nop
-  nop
-  nop
+  bl usb_phy__wait_5_cycles
   mov wstuff, #0b111111             // Clear out the bit-stuff rcounter
   // 2
 
