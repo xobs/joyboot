@@ -31,6 +31,9 @@ MEMORY
     ram        :  org = 0x1FFFFC00,  len = 4k
 }
 
+__bl_start__            = ORIGIN(bl_flash);
+__bl_size__             = LENGTH(bl_flash);
+__bl_end__              = __bl_start__ + __bl_size__;
 __app_start__           = ORIGIN(app_flash);
 __app_end__             = __app_start__ + LENGTH(app_flash);
 __ram_start__           = ORIGIN(ram);

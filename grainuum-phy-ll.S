@@ -237,6 +237,9 @@ usb_phy_read__sync_wait:
   nop
   nop
   nop
+  nop
+  nop
+  nop
 
   // Wait for the end-of-header sync pulse, which is when the value
   // repeats itself.  This is the "KK" in the KJKJKJKK training sequence.
@@ -568,29 +571,33 @@ wstuff    .req r0   /* The last six bits, used for bit stuffing (reuses wusbphy)
 
   ldr wtmp1, [wusbphy, #dnSAddr]    // Cache D- Set addr
   str wtmp1, [sp, #0]               // Save it on the stack
+  // 4
 
   /* Save passed-in values on the stack, before we scribble over them. */
   str wusbphy, [sp, #4]             // Save wusbphy,
   mov wbytes, r1                    // byte pointer,
   add r2, r2, r1                    // calculate the end of the array
   mov wend, r2                      // and save it too.
+  // 5
 
   /* Load the next byte into wpkt */
   mov wtmp1, wbytes                 // Load the byte pointer
   ldrb wpkt, [wtmp1]                // Get the actual byte
   add wtmp1, #1                     // Increase the byte pointer
   mov wbytes, wtmp1                 // Save the byte pointer back into wbytes
+  // 5
 
   mvn wpkt, wpkt                    // Invert the value to make the tests work
   mov wleft, #8                     // Start over with 8 bytes.
-  // ?
+  // 2
 
 usb_phy_write__get_first_packet:
   mov wlastsym, #1                  // Last symbols were "KK" from the header,
   mov wstuff, #0b111100             // so load a run of 2 into the stuff value.
-  // ?
+  // 2
 
   // usb start-of-frame header //
+  bl usb_phy__wait_8_cycles
   /*bl usb_phy_write__state_k // K state entered above already */
   bl usb_phy_write__state_j
   bl usb_phy_write__state_k

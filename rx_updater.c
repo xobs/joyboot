@@ -3,13 +3,14 @@
 #include "grainuum.h"
 #include "kl17.h"
 #include "flash.h"
+#include "memio.h"
 
 #include "palawan_bl.h"
 #include "murmur3.h"
 
 #define BUFFER_SIZE 8
 #define NUM_BUFFERS 4
-#define EP_INTERVAL_MS 10
+#define EP_INTERVAL_MS 6
 
 /* The area where the bootloader resides */
 #define FLASH_PROTECTED_AREA_OFFSET 0
@@ -41,64 +42,19 @@ void set_usb_config_num(struct GrainuumUSB *usb, int configNum)
 }
 
 static const uint8_t hid_report_descriptor[] = {
-  #if 0
-  0x05, 0x01, /* USAGE_PAGE (Generic Desktop)           */
-  0x09, 0x06, /* USAGE (Keyboard)                       */
-  0xa1, 0x01, /* COLLECTION (Application)               */
-  0x05, 0x07, /*   USAGE_PAGE (Keyboard)                */
-  0x19, 0xe0, /*   USAGE_MINIMUM (Keyboard LeftControl) */
-  0x29, 0xe7, /*   USAGE_MAXIMUM (Keyboard Right GUI)   */
-  0x15, 0x00, /*   LOGICAL_MINIMUM (0)                  */
-  0x25, 0x01, /*   LOGICAL_MAXIMUM (1)                  */
-  0x75, 0x01, /*   REPORT_SIZE (1)                      */
-  0x95, 0x08, /*   REPORT_COUNT (8)                     */
-  0x81, 0x02, /*   INPUT (Data,Var,Abs)                 */
-  0x95, 0x01, /*   REPORT_COUNT (1)                     */
-  0x75, 0x08, /*   REPORT_SIZE (8)                      */
-  0x81, 0x03, /*   INPUT (Cnst,Var,Abs)                 */
-  0x95, 0x05, /*   REPORT_COUNT (5)                     */
-  0x75, 0x01, /*   REPORT_SIZE (1)                      */
-  0x05, 0x08, /*   USAGE_PAGE (LEDs)                    */
-  0x19, 0x01, /*   USAGE_MINIMUM (Num Lock)             */
-  0x29, 0x05, /*   USAGE_MAXIMUM (Kana)                 */
-  0x91, 0x02, /*   OUTPUT (Data,Var,Abs)                */
-  0x95, 0x01, /*   REPORT_COUNT (1)                     */
-  0x75, 0x03, /*   REPORT_SIZE (3)                      */
-  0x91, 0x03, /*   OUTPUT (Cnst,Var,Abs)                */
-  0x95, 0x06, /*   REPORT_COUNT (6)                     */
-  0x75, 0x08, /*   REPORT_SIZE (8)                      */
-  0x15, 0x00, /*   LOGICAL_MINIMUM (0)                  */
-  0x25, 0x65, /*   LOGICAL_MAXIMUM (101)                */
-  0x05, 0x07, /*   USAGE_PAGE (Keyboard)                */
-  0x19, 0x00, /*   USAGE_MINIMUM (Reserved)             */
-  0x29, 0x65, /*   USAGE_MAXIMUM (Keyboard Application) */
-  0x81, 0x00, /*   INPUT (Data,Ary,Abs)                 */
-  0xc0,        /* END_COLLECTION                         */
-#endif
-  0x06, 0x00, 0xFF,   // USAGE_PAGE = 0xFF00 (Vendor Defined Page 1)
-  0x09, 0x01,         // USAGE (Vendor Usage 1)
-  0xA1, 0x01,         // COLLECTION (Application)
-    0x15, 0x00,       //      USAGE_MINIMUM (data bytes in the report may have minimum value = 0x00)
-    0x26, 0xFF, 0x00, //      USAGE_MAXIMUM (data bytes in the report may have maximum value = 0x00FF = unsigned 255)
-    
-    0x75, 0x08,       //      REPORT_SIZE (8-bit field size)
-    
-    0x95, BUFFER_SIZE,//      REPORT_COUNT Make eight 8-bit fields (the next time the parser hits an "Input", "Output", or "Feature" item)
-    0x09, 0x01,       //      USAGE (Undefined)
-    0x81, 0x02,       //      INPUT (Data, Array, Abs): Instantiates input packet fields based on the above report size, count, logical min/max, and usage.
-    
-    0x95, BUFFER_SIZE,//      REPORT_COUNT (Make eight 8-bit fields (the next time the parser hits an "Input", "Output", or "Feature" item))
-    0x09, 0x01,       //      USAGE (Undefined)
-    0x91, 0x00,       //      OUTPUT (Data, Array, Abs): Instantiates
-                      //      output packet fields.  Uses same report size
-                      //      and count as "Input" fields, since nothing
-                      //      new/different was specified to the parser
-                      //      since the "Input" item.
-    
-    0x95, BUFFER_SIZE,//      REPORT_COUNT (Make eight 8-bit fields (the next time the parser hits an "Input", "Output", or "Feature" item))
-    0x09, 0x01,       //      USAGE (Undefined)
-    0xB1, 0x02,       //      Feature: Data
-  0xC0 // END_COLLECTION
+  0x06, 0x00, 0xFF,            // (GLOBAL) USAGE_PAGE         0xFF00 Vendor-defined
+  0x09, 0x01,                  // (LOCAL)  USAGE              0xFF000001
+  0xA1, 0x01,                  // (MAIN)   COLLECTION         0x01 Application (Usage=0xFF000001: Page=Vendor-defined, Usage=, Type=)
+  0x15, 0x00,                  //   (GLOBAL) LOGICAL_MINIMUM    0x00 (0) <-- Redundant: LOGICAL_MINIMUM is already 0 <-- Info: Consider replacing 15 00 with 14
+  0x26, 0xFF, 0x00,            //   (GLOBAL) LOGICAL_MAXIMUM    0x00FF (255)
+  0x75, 0x08,                  //   (GLOBAL) REPORT_SIZE        0x08 (8) Number of bits per field
+  0x95, 0x08,                  //   (GLOBAL) REPORT_COUNT       0x08 (8) Number of fields
+  0x06, 0xFF, 0x00,            //   (GLOBAL) USAGE_PAGE         0xFFFF Vendor-defined
+  0x09, 0x01,                  //   (LOCAL)  USAGE              0xFFFF0001
+  0x81, 0x02,                  //   (MAIN)   INPUT              0x00000002 (8 fields x 8 bits) 0=Data 1=Variable 0=Absolute 0=NoWrap 0=Linear 0=PrefState 0=NoNull 0=NonVolatile 0=Bitmap
+  0x09, 0x01,                  //   (LOCAL)  USAGE              0xFFFF0001
+  0x91, 0x02,                  //   (MAIN)   OUTPUT             0x00000002 (8 fields x 8 bits) 0=Data 1=Variable 0=Absolute 0=NoWrap 0=Linear 0=PrefState 0=NoNull 0=NonVolatile 0=Bitmap
+  0xC0,                        // (MAIN)   END_COLLECTION     Application
 };
 
 static const struct usb_device_descriptor device_descriptor = {
@@ -111,7 +67,7 @@ static const struct usb_device_descriptor device_descriptor = {
   .bMaxPacketSize0 = 0x08,    /* 8-byte packets max */
   .idVendor = 0x1bcf,
   .idProduct = 0x05ce,
-  .bcdDevice = 0xa014,        /* Device release 1.0 */
+  .bcdDevice = 0x0114,        /* Device release 1.14 */
   .iManufacturer = 0x02,      /* No manufacturer string */
   .iProduct = 0x01,           /* Product name in string #2 */
   .iSerialNumber = 0x03,      /* No serial number */
@@ -191,7 +147,7 @@ static const struct usb_configuration_descriptor configuration_descriptor = {
     /* struct usb_endpoint_descriptor { */
     /*  uint8_t  bLength;             */ 7,
     /*  uint8_t  bDescriptorType;     */ DT_ENDPOINT,
-    /*  uint8_t  bEndpointAddress;    */ 0x82,  /* EP1 (IN) */
+    /*  uint8_t  bEndpointAddress;    */ 0x81,  /* EP1 (IN) */
     /*  uint8_t  bmAttributes;        */ 3,     /* Interrupt */
     /*  uint16_t wMaxPacketSize;      */ 0x08, 0x00,
     /*  uint8_t  bInterval;           */ EP_INTERVAL_MS, /* Every 6 ms */
@@ -200,7 +156,7 @@ static const struct usb_configuration_descriptor configuration_descriptor = {
     /* struct usb_endpoint_descriptor { */
     /*  uint8_t  bLength;             */ 7,
     /*  uint8_t  bDescriptorType;     */ DT_ENDPOINT,
-    /*  uint8_t  bEndpointAddress;    */ 0x02,  /* EP1 (OUT) */
+    /*  uint8_t  bEndpointAddress;    */ 0x01,  /* EP1 (OUT) */
     /*  uint8_t  bmAttributes;        */ 3,     /* Interrupt */
     /*  uint16_t wMaxPacketSize;      */ 0x08, 0x00,
     /*  uint8_t  bInterval;           */ EP_INTERVAL_MS, /* Every 6 ms */
@@ -252,8 +208,9 @@ static int get_string_descriptor(struct GrainuumUSB *usb,
     return sizeof(en_us);
   }
 
+  // Product
   if (num == 1)
-    return send_string_descriptor("123", data);
+    return send_string_descriptor("Palawan Bootloader", data);
 
   if (num == 2)
     return send_string_descriptor("21", data);
@@ -368,9 +325,8 @@ static int received_data(struct GrainuumUSB *usb,
   (void)bytes;
   (void)data;
 
-  if (epNum == 2) {
+  if (epNum == 1) {
     rx_buffer_head = (rx_buffer_head + 1) & (NUM_BUFFERS - 1);
-    //asm("bkpt #3");
   }
 
   /* Return 0, indicating this packet is complete. */
@@ -393,7 +349,7 @@ static struct GrainuumConfig hid_link = {
   .setConfigNum               = set_usb_config_num,
 };
 
-static GRAINUUM_BUFFER(phy_queue, 4);
+static GRAINUUM_BUFFER(phy_queue, 8);
 
 void VectorBC(void)
 {
@@ -439,70 +395,163 @@ static int do_erase_flash(struct bl_state *state, struct bl_pkt *result,
   int ret;
 
   // Make sure we're not overwriting the bootloader
-  if ((address < (FLASH_PROTECTED_AREA_OFFSET + FLASH_PROTECTED_AREA_SIZE)) && (state->flash_is_protected))
+  extern uint32_t __bl_size__;
+  if ((address * FTFx_PSECTOR_SIZE < (uint32_t)&__bl_size__) && (state->flash_is_protected))
     return address_out_of_range;
 
   // XXX If the protected area isn't located at offset 0, then this could extend into it
 
   // Make sure we don't run off the end of flash
-  if ((address + count) > P_FLASH_SIZE)
+  if ((address * FTFx_PSECTOR_SIZE + count * FTFx_PSECTOR_SIZE) > P_FLASH_SIZE)
     return address_out_of_range;
 
-  ret = flashEraseSectors(address / FTFx_PSECTOR_SIZE, count / FTFx_PSECTOR_SIZE);
+  while (count--) {
+    ret = flashEraseSectors(address, 1);
 
-  if (ret != F_ERR_OK) {
-    result->result.extra = ret;
-    return subsystem_error;
+    if (ret != F_ERR_OK) {
+      result->result.large = ret;
+      result->result.medium = address;
+      return subsystem_error;
+    }
+    process_next_usb_event(&defaultUsbPhy);
   }
 
   return no_error;
 }
 
-static int do_program_flash(struct bl_state *state, struct bl_pkt *result,
-                            uint32_t value)
-{
-  int ret;
-  uint32_t offset;
+static uint32_t peek_poke_read(uint8_t type, uint32_t address) {
+  switch (type & PEEK_POKE_SIZE_MASK) {
+    case PEEK_POKE_SIZE_8: return readb(address);
+    case PEEK_POKE_SIZE_16: return readw(address);
+    case PEEK_POKE_SIZE_32: return readl(address);
+    default: return -1;
+  }
+}
 
-  offset = state->offset;
+// Number of bytes for the given operation
+static uint32_t peek_poke_size(uint8_t type) {
+  switch (type & PEEK_POKE_SIZE_MASK) {
+    case PEEK_POKE_SIZE_8: return 1;
+    case PEEK_POKE_SIZE_16: return 2;
+    default: return 4;
+  }
+}
 
-  if ((offset >= FLASH_PROTECTED_AREA_OFFSET) && (offset < (FLASH_PROTECTED_AREA_OFFSET + FLASH_PROTECTED_AREA_SIZE)))
-    return address_out_of_range;
+static int do_peek_poke(struct bl_state *state, struct result_pkt *result,
+                        const struct read_write_pkt *peek_poke) {
+  (void)state;
+  static uint32_t address; // Persistent address for all operations
 
-  ret = flashProgram((uint8_t *)&value, (uint8_t *)&offset, sizeof(value));
-  if (ret != F_ERR_OK) {
-    result->result.extra = ret;
-    return subsystem_error;
+  if (peek_poke->type & PEEK_POKE_READ) {
+    address = peek_poke->address;
+    result->large = peek_poke_read(peek_poke->type, address);
+  }
+  else {
+    uint32_t value = peek_poke->value;
+
+    // If an operation was specified, perform it.
+    switch (peek_poke->type & PEEK_POKE_OP_MASK) {
+      case PEEK_POKE_OP_NONE: break;
+      case PEEK_POKE_OP_SET: value = peek_poke_read(peek_poke->type, address) | value; break;
+      case PEEK_POKE_OP_CLR: value = peek_poke_read(peek_poke->type, address) & ~value; break;
+      case PEEK_POKE_OP_TOG: value = peek_poke_read(peek_poke->type, address) ^ value; break;
+    }
+
+    // Write the computed value to memory
+    switch (peek_poke->type & PEEK_POKE_SIZE_MASK) {
+      case PEEK_POKE_SIZE_8: writeb(value, address); break;
+      case PEEK_POKE_SIZE_16: writew(value, address); break;
+      case PEEK_POKE_SIZE_32: writel(value, address); break;
+    }
   }
 
-  state->offset += 4;
+  // If an increment/decrement was requested, perform that operation
+  switch (peek_poke->type & PEEK_POKE_INCR_MASK) {
+    case PEEK_POKE_INCR: address += peek_poke->increment * peek_poke_size(peek_poke->type); break;
+    case PEEK_POKE_DECR: address -= peek_poke->increment * peek_poke_size(peek_poke->type); break;
+  }
+
   return no_error;
 }
 
-static int do_set_address(struct bl_state *state, struct bl_pkt *result,
-                          uint32_t offset)
+static int do_start_programming(struct bl_state *state, struct result_pkt *result,
+                                const struct start_programming_pkt *pkt)
 {
   (void)result;
+  uint32_t offset = pkt->offset;
+  uint32_t size = pkt->count;
+  extern uint32_t __app_start__;
+  extern uint32_t __app_end__;
 
   if (offset > P_FLASH_SIZE)
     return address_out_of_range;
 
-  if ((offset > FLASH_PROTECTED_AREA_OFFSET) && (offset < (FLASH_PROTECTED_AREA_OFFSET + FLASH_PROTECTED_AREA_SIZE)))
+  if ((offset < ((uint32_t)&__app_start__)) || ((offset + size) > ((uint32_t)&__app_end__)))
     return address_out_of_range;
 
+  if (offset & 3)
+    return address_not_valid;
+
+  if (size & 3)
+    return size_not_valid;  
+
   state->offset = offset;
+  state->count = size;
+  state->buffer_offset = 0;
+
   return no_error;
 }
 
-static int do_echo_back(struct bl_state *state, struct bl_pkt *result,
+static int do_program_data(struct bl_state *state, struct result_pkt *result,
+                           const struct program_pkt *pkt)
+{
+  uint32_t byte;
+
+  for (byte = 0; byte < sizeof(pkt->data) && state->count > 0; byte++) {
+    state->buffer[state->buffer_offset++] = pkt->data[byte];
+
+    if (state->buffer_offset >= 3) {
+
+      // If the flash isn't erased, throw an error.
+      if (readl(state->offset) != 0xffffffff) {
+        result->large = state->offset;
+        return flash_not_erased;
+      }
+
+      // If the value is 0xffffffff, don't bother programming it
+      if (state->buffer32 != 0xffffffff) {
+        int ret;
+        ret = flashProgram((uint8_t *)&state->buffer32, (uint8_t *)&state->offset, sizeof(state->buffer32));
+        if (ret != F_ERR_OK) {
+          result->medium = ret;
+          result->large = state->offset;
+          return subsystem_error;
+        }
+      }
+
+      state->count -= 4;
+      state->offset += 4;
+
+      state->buffer_offset = 0;
+    }
+  }
+
+  return no_error;
+}
+
+static int do_echo_back(struct bl_state *state, struct result_pkt *result,
                         const struct bl_pkt *packet)
 {
   (void)state;
-  memcpy(result, packet, sizeof(*result));
+  const uint8_t *src = (const uint8_t *)packet;
+  uint8_t *dst = (uint8_t *)result;
+  int i;
+  for (i = 0; i < 7; i++)
+    dst[i] = src[i+1];
   return no_error;
 }
 
-static int do_hash_memory(struct bl_state *state, struct bl_pkt *result,
+static int do_hash_memory(struct bl_state *state, struct result_pkt *result,
                           const struct bl_pkt *packet)
 {
   (void)state;
@@ -515,8 +564,48 @@ static int do_hash_memory(struct bl_state *state, struct bl_pkt *result,
   if (length & 3)
     return size_not_valid;
 
-  MurmurHash3_x86_32((const void *)start, length, 0, result->result.reserved);
+  MurmurHash3_x86_32((const void *)start, length, 0, &result->large);
 
+  return no_error;
+}
+
+static int do_bootloader_info(struct bl_state *state, struct info_pkt *result) {
+  (void)state;
+  result->block_size = 10;
+  result->bl_enter_reason = bootloader_reason;
+  result->bl_version = 2;
+  return no_error;
+}
+
+static int do_reboot(struct bl_state *state, struct result_pkt *result,
+                     const struct reboot_pkt *rb) {
+
+  (void)state;
+
+  result->medium = 0;
+
+  if (rb->reboot_key[result->medium++] != 0x91)
+    return key_not_valid;
+
+  if (rb->reboot_key[result->medium++] != 0x82)
+    return key_not_valid;
+
+  if (rb->reboot_key[result->medium++] != 0x73)
+    return key_not_valid;
+
+  if (rb->reboot_key[result->medium++] != 0x64)
+    return key_not_valid;
+
+  if (rb->reboot_key[result->medium++] != 0xad)
+    return key_not_valid;
+
+  if (rb->reboot_key[result->medium++] != 0xef)
+    return key_not_valid;
+
+  if (rb->reboot_key[result->medium++] != 0xba)
+    return key_not_valid;
+
+  asm("bkpt #0");
   return no_error;
 }
 
@@ -524,26 +613,41 @@ static int process_one_packet(struct bl_state *state,
                               struct bl_pkt *result,
                               const struct bl_pkt *packet)
 {
+  extern uint32_t __app_start__, __app_end__;
+  switch (packet->cmd & 0x0f) {
 
-  switch (packet->cmd) {
+  case bootloader_info:
+    return do_bootloader_info(state, &result->info);
 
   case erase_block:
     return do_erase_flash(state, result, packet->erase_sector.offset, packet->erase_sector.count);
 
-  case program_value:
-    return do_program_flash(state, result, packet->program.data);
+  case reboot_cmd:
+    return do_reboot(state, &result->result, &packet->reboot);
 
-  case set_address:
-    return do_set_address(state, result, packet->set_address.offset);
+  case start_programming:
+    return do_start_programming(state, &result->result, &result->start_programming);
 
-  case echo_back:
-    return do_echo_back(state, result, packet);
+  case program_data:
+    return do_program_data(state, &result->result, &result->program);
+
+  case erase_app:
+    return do_erase_flash(state, result,
+                          ((uint32_t)&__app_start__) / FTFx_PSECTOR_SIZE,
+                          (((uint32_t)&__app_end__) - ((uint32_t)&__app_start__)) / FTFx_PSECTOR_SIZE);
+
+  case peek_poke_cmd:
+    return do_peek_poke(state, &result->result, &packet->read_write);
+
+  case echo_back_cmd:
+    return do_echo_back(state, &result->result, packet);
 
   case hash_memory:
-    return do_hash_memory(state, result, packet);
-  }
+    return do_hash_memory(state, &result->result, packet);
 
-  return unhandled_command;
+  default:
+    return unhandled_command;
+  }
 }
 
 int updateRx(void)
@@ -583,7 +687,7 @@ int updateRx(void)
   while (!done) {
     process_next_usb_event(&defaultUsbPhy);
 
-    // If the rx_buffer_head has advnaced, then we have data to process in EP2
+    // If the rx_buffer_head has advnaced, then we have data to process in EP1
     if (rx_buffer_head != rx_buffer_tail) {
       struct bl_pkt *incoming_pkt = (struct bl_pkt *)rx_buffer[rx_buffer_tail];
 
@@ -592,18 +696,19 @@ int updateRx(void)
       // as is the case here, handle it as a new packet.
       if (rx_buffer_tail != last_packet_num) {
         last_packet_num = rx_buffer_tail;
-        result_pkt.seq_num = incoming_pkt->seq_num;
-        result_pkt.cmd = packet_result;
+
+        // Pack the sequence number and the 'result' command together
+        result_pkt.cmd = result_cmd | (incoming_pkt->cmd & 0xf0);
 
         unsigned int i;
         for (i = 0; i < sizeof(result_pkt.raw.data); i++)
           result_pkt.raw.data[i] = 0;
 
-        result_pkt.result.code = process_one_packet(&state, &result_pkt, incoming_pkt);
+        result_pkt.result.small = process_one_packet(&state, &result_pkt, incoming_pkt);
       }
 
       // Advance the packet number only if this packet was sent successfully
-      if (!grainuumSendData(&defaultUsbPhy, 2, &result_pkt, sizeof(result_pkt))) {
+      if (!grainuumSendData(&defaultUsbPhy, 1, &result_pkt, sizeof(result_pkt))) {
         rx_buffer_tail = (rx_buffer_tail + 1) & (NUM_BUFFERS - 1);
       }
     }

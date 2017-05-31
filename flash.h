@@ -2,15 +2,13 @@
 #define _FLASH_H_
 
 #define P_FLASH_BASE              0x00000000
-#define P_FLASH_SIZE              131072
+#define P_FLASH_SIZE              32768
 
 #define READ_NORMAL_MARGIN        0x00
 #define READ_USER_MARGIN          0x01
 #define READ_FACTORY_MARGIN       0x02
 
 #define FTFx_PSECTOR_SIZE         (1024)
-
-#define F_USER_SECTOR_START ((uint32_t)__storage_start__ / FTFx_PSECTOR_SIZE) 
 
 /************************************************************/
 /* prototypes                                               */

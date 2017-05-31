@@ -2,15 +2,10 @@
 #include "kl17.h"
 #include "core_cm0plus.h"
 #include "palawan.h"
+#include "palawan_bl.h"
 #include "radio.h"
 
-enum bootloader_reason {
-  NOT_ENTERING_BOOTLOADER,
-  BOOT_TOKEN_PRESENT,
-  BOOT_FAILED_TOO_MANY_TIMES,
-  NO_PROGRAM_PRESENT,
-  BUTTON_HELD_DOWN,
-} bootloader_reason;
+enum bootloader_reason bootloader_reason;
 
 int updateRx(void);
 int updateTx(void);
@@ -144,6 +139,8 @@ __attribute__((noreturn))
 void bootloader_main(void) {
 
   if (should_enter_bootloader()) {
+    boot_token.magic = 0;
+    boot_token.boot_count = 0;
 
     if (palawanModel() == palawan_rx)
       /* Start USB */
