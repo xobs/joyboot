@@ -4,6 +4,10 @@
 #include "memio.h"
 #include "kl17.h"
 
+#ifndef NULL
+#define NULL ((void *)0)
+#endif
+
 /* Commands */
 #define FTFx_FSTAT_CCIF     (1 << 7)
 #define FTFx_FSTAT_RDCOLERR (1 << 6)
@@ -28,10 +32,12 @@
   (((d) <<  0) & 0x000000ff) \
   )
 
+int idle_hits;
 /* Uncomment this to store this function in RAM */
-/*__attribute__((section("ramtext")))*/
+__attribute__((section(".ramtext")))
 static int kinetis_flash_cmd(uint8_t cmd, uint32_t addr,
-                             uint32_t data1, uint32_t data2) {
+                             uint32_t data1, uint32_t data2,
+                             void (*idle_func)(void)) {
   uint8_t fstat;
   int ret = F_ERR_OK;
 
@@ -53,13 +59,17 @@ static int kinetis_flash_cmd(uint8_t cmd, uint32_t addr,
   writel(data2, FTFx_FCCOBB);
 
   /* start command */
+  __disable_irq();
   writeb(FTFx_FSTAT_CCIF, FTFx_FSTAT);
 
   /* Wait for the command to complete */
-  while (!(readb(FTFx_FSTAT) & FTFx_FSTAT_CCIF))
-    ;
+  while (!(readb(FTFx_FSTAT) & FTFx_FSTAT_CCIF)) {
+    idle_hits++;
+    idle_func();
+  }
 
   fstat = readb(FTFx_FSTAT);
+  __enable_irq();
 
   /* Check ACCERR and FPVIOL are zero in FSTAT */
   if (fstat & (FTFx_FSTAT_ACCERR | FTFx_FSTAT_FPVIOL | FTFx_FSTAT_MGSTAT0))
@@ -70,14 +80,12 @@ static int kinetis_flash_cmd(uint8_t cmd, uint32_t addr,
 
 // offset is in sectors
 // sectorCount is in sectors
-int8_t flashEraseSectors(uint32_t offset, uint16_t sectorCount) {
-  uint32_t destination;          // sector number of target
+int8_t flashEraseSectors(uint32_t destination, uint16_t sectorCount, void (*idle_func)(void)) {
   uint32_t end;
-  uint16_t number;               /* Number of longword or phrase to be program or verify*/
-  uint32_t margin_read_level;    /* 0=normal, 1=user - margin read for reading 1's */
-  int32_t retval = F_ERR_OK;
+  //uint16_t number;               /* Number of longword or phrase to be program or verify*/
+  //uint32_t margin_read_level;    /* 0=normal, 1=user - margin read for reading 1's */
+  int8_t retval = F_ERR_OK;
 
-  destination = offset;
   end = destination + (uint32_t) sectorCount;
 
   if (end > ((P_FLASH_BASE + P_FLASH_SIZE) / FTFx_PSECTOR_SIZE)) {
@@ -89,10 +97,11 @@ int8_t flashEraseSectors(uint32_t offset, uint16_t sectorCount) {
 
     retval = kinetis_flash_cmd(FTFx_CMD_SECTERASE,
                                destination * FTFx_PSECTOR_SIZE,
-                               0, 0);
+                               0, 0,
+                               idle_func);
     if (F_ERR_OK != retval)
       return retval;
-
+    /*
     for (margin_read_level = 0; margin_read_level <= 2; margin_read_level++) {
       number = FTFx_PSECTOR_SIZE / 4;
       retval = kinetis_flash_cmd(FTFx_CMD_SECTSTAT,
@@ -100,6 +109,7 @@ int8_t flashEraseSectors(uint32_t offset, uint16_t sectorCount) {
                   MAKE_FCCOB(number >> 8, number, margin_read_level, 0),
                   0);
     }
+    */
 
     destination++;
   }
@@ -149,7 +159,8 @@ int8_t flashProgram(uint8_t *src, uint8_t *dest, uint32_t count) {
   for (i = 0; i < count; i += 4) {
     ret = kinetis_flash_cmd(FTFx_CMD_LWORDPROG,
                             (uint32_t)&dest[i],
-                            *((uint32_t *)&src[i]), 0);
+                            *((uint32_t *)&src[i]), 0,
+                            NULL);
   }
 
   if (ret)
@@ -161,7 +172,8 @@ int8_t flashProgram(uint8_t *src, uint8_t *dest, uint32_t count) {
     ret = kinetis_flash_cmd(FTFx_CMD_PROGCHECK,
                             (uint32_t)&dest[i],
                             MAKE_FCCOB(READ_USER_MARGIN, 0, 0, 0),
-                            *((uint32_t *)&src[i]));
+                            *((uint32_t *)&src[i]),
+                            NULL);
   }
 
   if (ret) 

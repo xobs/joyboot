@@ -141,6 +141,7 @@ void bootloader_main(void) {
   if (should_enter_bootloader()) {
     boot_token.magic = 0;
     boot_token.boot_count = 0;
+    asm("bkpt #92");
 
     if (palawanModel() == palawan_rx)
       /* Start USB */

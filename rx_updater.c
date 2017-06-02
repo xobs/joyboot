@@ -43,13 +43,12 @@ static void set_usb_config_num(struct GrainuumUSB *usb, int configNum)
 
 static const uint8_t hid_report_descriptor[] = {
   0x06, 0x00, 0xFF,            // (GLOBAL) USAGE_PAGE         0xFF00 Vendor-defined
-  0x09, 0x01,                  // (LOCAL)  USAGE              0xFF000001
-  0xA1, 0x01,                  // (MAIN)   COLLECTION         0x01 Application (Usage=0xFF000001: Page=Vendor-defined, Usage=, Type=)
-  0x15, 0x00,                  //   (GLOBAL) LOGICAL_MINIMUM    0x00 (0) <-- Redundant: LOGICAL_MINIMUM is already 0 <-- Info: Consider replacing 15 00 with 14
+  0x09, 0x00,                  // (LOCAL)  USAGE              0xFF000000
+  0xA1, 0x01,                  // (MAIN)   COLLECTION         0x01 Application (Usage=0xFF000000: Page=Vendor-defined, Usage=, Type=)
   0x26, 0xFF, 0x00,            //   (GLOBAL) LOGICAL_MAXIMUM    0x00FF (255)
   0x75, 0x08,                  //   (GLOBAL) REPORT_SIZE        0x08 (8) Number of bits per field
   0x95, 0x08,                  //   (GLOBAL) REPORT_COUNT       0x08 (8) Number of fields
-  0x06, 0xFF, 0x00,            //   (GLOBAL) USAGE_PAGE         0xFFFF Vendor-defined
+  0x06, 0xFF, 0xFF,            //   (GLOBAL) USAGE_PAGE         0xFFFF Vendor-defined
   0x09, 0x01,                  //   (LOCAL)  USAGE              0xFFFF0001
   0x81, 0x02,                  //   (MAIN)   INPUT              0x00000002 (8 fields x 8 bits) 0=Data 1=Variable 0=Absolute 0=NoWrap 0=Linear 0=PrefState 0=NoNull 0=NonVolatile 0=Bitmap
   0x09, 0x01,                  //   (LOCAL)  USAGE              0xFFFF0001
@@ -318,14 +317,20 @@ static struct GrainuumConfig hid_link = {
 
 static GRAINUUM_BUFFER(phy_queue, 8);
 
-void VectorBC(void)
-{
+__attribute__((section(".ramtext")))
+static void handle_usb_packet(void) {
   grainuumCaptureI(&defaultUsbPhy, GRAINUUM_BUFFER_ENTRY(phy_queue));
 
   /* Clear all pending interrupts on this port. */
   PORTB->ISFR = 0xFFFFFFFF;
 }
 
+void VectorBC(void)
+{
+  handle_usb_packet();
+}
+
+__attribute__((section(".ramtext")))
 void grainuumReceivePacket(struct GrainuumUSB *usb)
 {
   (void)usb;
@@ -338,6 +343,7 @@ void grainuumInitPre(struct GrainuumUSB *usb)
   GRAINUUM_BUFFER_INIT(phy_queue);
 }
 
+/*
 static void process_next_usb_event(struct GrainuumUSB *usb) {
   if (!GRAINUUM_BUFFER_IS_EMPTY(phy_queue)) {
     uint8_t *in_ptr = (uint8_t *)GRAINUUM_BUFFER_TOP(phy_queue);
@@ -351,19 +357,37 @@ static void process_next_usb_event(struct GrainuumUSB *usb) {
     return;
   }
 }
+*/
+
+static void process_all_usb_events(struct GrainuumUSB *usb) {
+  while (!GRAINUUM_BUFFER_IS_EMPTY(phy_queue)) {
+    uint8_t *in_ptr = (uint8_t *)GRAINUUM_BUFFER_TOP(phy_queue);
+
+    // Advance to the next packet (allowing us to be reentrant)
+    GRAINUUM_BUFFER_REMOVE(phy_queue);
+
+    // Process the current packet
+    grainuumProcess(usb, in_ptr);
+  }
+}
 
 static int done;
 static uint32_t erase_flash_address;
 static uint32_t erase_flash_count;
+
+__attribute__((section(".ramtext")))
+static void read_usb_if_exists(void) {
+  // If an interrupt is pending, process the USB packet.
+  if (PORTB->ISFR)
+    handle_usb_packet();
+}
 
 static int erase_flash_callback(struct bl_state *state, struct result_pkt *result, void *arg) {
   (void)arg;
   int ret;
 
   result->small = no_error;
-  __disable_irq();
-  ret = flashEraseSectors(erase_flash_address++, 1);
-  __enable_irq();
+  ret = flashEraseSectors(erase_flash_address++, 1, read_usb_if_exists);
   erase_flash_count--;
 
   if (ret != F_ERR_OK) {
@@ -673,7 +697,7 @@ int updateRx(void)
   grainuumConnect(&defaultUsbPhy);
 
   while (!done) {
-    process_next_usb_event(&defaultUsbPhy);
+    process_all_usb_events(&defaultUsbPhy);
 
     // If the rx_buffer_head has advnaced, then we have data to process in EP1
     if (rx_buffer_head != rx_buffer_tail) {
@@ -704,29 +728,20 @@ int updateRx(void)
       }
     }
 
-  {
-    int i;
-    for (i = 0; i < 1000; i++) {
-      int j;
-      for (j = 0; j < 77; j++) {
-        asm("");
-      }
-    }
-  }
-
-
     // If there is an ongoing process, run that function.
     if (state.continue_function != NULL) {
+
+      result_pkt.cmd = ongoing_process_cmd | (last_cmd & 0xf0);
+      grainuumDropData(&defaultUsbPhy);
+      grainuumSendData(&defaultUsbPhy, 1, &result_pkt, sizeof(result_pkt));
 
       // If the function returns zero, deregister it and send "finish".
       if (!state.continue_function(&state, &result_pkt.result, state.continue_arg)) {
         result_pkt.cmd = result_cmd | (last_cmd & 0xf0);
         state.continue_function = NULL;
       }
-      else
-        result_pkt.cmd = ongoing_process_cmd | (last_cmd & 0xf0);
 
-      //grainuumDropData(&defaultUsbPhy);
+      grainuumDropData(&defaultUsbPhy);
       if (grainuumSendData(&defaultUsbPhy, 1, &result_pkt, sizeof(result_pkt)))
         misses++;
       else

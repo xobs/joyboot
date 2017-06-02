@@ -20,7 +20,7 @@ extern "C" {
 
 void flashStart(void);
 uint32_t flashGetSecurity(void);
-int8_t flashEraseSectors(uint32_t sectorOffset, uint16_t sectorCount);
+int8_t flashEraseSectors(uint32_t destination, uint16_t sectorCount, void (*idle_func)(void));
 int8_t flashProgram(uint8_t *src, uint8_t *dst, uint32_t count);
 
 #ifdef __cplusplus

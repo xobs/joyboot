@@ -216,7 +216,12 @@ void grainuumDropData(struct GrainuumUSB *usb)
 {
   usb->state.packet_queued = 0;
   usb->state.data_out = 0;
-  usb->state.address = 0;
+  grainuumWriteQueue(usb, 0, NULL, 0);
+}
+
+int grainuumDataQueued(struct GrainuumUSB *usb)
+{
+  return (usb->state.data_out || usb->state.packet_queued);
 }
 
 int grainuumSendData(struct GrainuumUSB *usb, int epnum,
