@@ -1,6 +1,7 @@
 #include "palawan.h"
 #include "kl17.h"
 #include "kinetis_adc.h"
+#include "palawan_bl.h"
 
 #define RADIO_REG_DIOMAPPING2   (0x26)
 #define RADIO_CLK_DIV1          (0x00)
@@ -33,8 +34,6 @@
 #define KINETIS_MCG_FLL_OUTDIV4     2           /* Divide OUTDIV1 output by 2 => 24 MHz */
 #define KINETIS_SYSCLK_FREQUENCY    47972352UL  /* 32.768 kHz * 1464 (~48 MHz) */
 
-static enum palawan_model _model;
-
 /**
  * @brief   KL2x clocks and PLL initialization.
  * @note    All the involved constants come from the file @p board.h.
@@ -43,7 +42,6 @@ static enum palawan_model _model;
  * @special
  */
 void kl02_clk_init(void) {
-#if !KINETIS_NO_INIT
   /* Disable COP watchdog */
   SIM->COPC = 0;
 
@@ -106,8 +104,20 @@ void kl02_clk_init(void) {
 
   /* Loop until S[OSCINIT0] is 1, indicating the
      crystal selected by C2[EREFS0] has been initialized. */
-  while ((MCG->S & MCG_S_OSCINIT0) == 0)
-    ;
+  int tries = 0;
+  while ((MCG->S & MCG_S_OSCINIT0) == 0) {
+    if (tries++ > 10000) {
+      boot_token.board_model = palawan_tx;
+      MCG->C1 =                /* Clear the IREFS bit to switch to the external reference. */
+          MCG_C1_CLKS_FLLPLL | /* Use FLL for system clock, MCGCLKOUT. */
+          MCG_C1_IRCLKEN |     /* Enable the internal reference clock. */
+          MCG_C1_IREFS;        /* Use the internal reference clock. */
+      MCG->C6 = 0;             /* PLLS=0: Select FLL as MCG source, not PLL */
+      return;
+    }
+  }
+  boot_token.board_model = palawan_rx;
+  
   /* Loop until S[IREFST] is 0, indicating the
      external reference is the current reference clock source. */
   while ((MCG->S & MCG_S_IREFST) != 0)
@@ -124,125 +134,10 @@ void kl02_clk_init(void) {
   /* Wait for the FLL lock time; t[fll_acquire][max] = 1 ms */
   /* TODO - not implemented - is it required? Freescale example code
      seems to omit it. */
-
-#else
-  #error "Unimplemented"
-#endif /* !KINETIS_NO_INIT */
 }
 
 enum palawan_model palawanModel(void) {
-  /* The strapping resistors were wired up to a pin that can't do ADC */
-  return palawan_rx;
-#if 0
-  /* Sample the strapping resistors, to determine model type */
-  if ((_model != palawan_tx) && (_model != palawan_rx)) {
-    uint16_t gain;
-    int resistance;
-    int resistance_min;
-    int resistance_max;
-
-    /* Ungate PORTE, where the ADC we're using lives */
-    SIM->SCGC5 |= SIM_SCGC5_PORTB;
-
-    /* Configure PTE30 to be an input pad */
-    PORTB->PCR[12] = PORTx_PCRn_MUX(0);
-
-    /* Ungate the ADC */
-    SIM->SCGC6 |= SIM_SCGC6_ADC0;
-
-    /* Quick-and-dirty calibration */
-    ADC0->CFG1 =  ADCx_CFG1_ADIV(ADCx_CFG1_ADIV_DIV_8) |
-                  ADCx_CFG1_ADICLK(ADCx_CFG1_ADIVCLK_BUS_CLOCK_DIV_2);
-
-    /* Software trigger, no DMA */
-    ADC0->SC2 = 0;
-
-    /* Enable hardware averaging over 32 samples, and run calibration */
-    ADC0->SC3 = ADCx_SC3_AVGE |
-                ADCx_SC3_AVGS(ADCx_SC3_AVGS_AVERAGE_32_SAMPLES) |
-                ADCx_SC3_CAL;
-
-    /* Wait for calibration to finish */
-    while (!(ADC0->SC1A & ADCx_SC1n_COCO))
-      ;
-
-    /* Adjust gain according to reference manual */
-
-    gain = ((ADC0->CLP0 + ADC0->CLP1 + ADC0->CLP2 +
-             ADC0->CLP3 + ADC0->CLP4 + ADC0->CLPS) / 2) | 0x8000;
-    ADC0->PG = gain;
-
-    gain = ((ADC0->CLM0 + ADC0->CLM1 + ADC0->CLM2 +
-             ADC0->CLM3 + ADC0->CLM4 + ADC0->CLMS) / 2) | 0x8000;
-    ADC0->MG = gain;
-
-    /* Reset Rn */
-    (void)ADC0->RA;
-
-    /* Configure for 16-bit conversion */
-    ADC0->CFG1 =  ADCx_CFG1_ADIV(ADCx_CFG1_ADIV_DIV_8) |
-                  ADCx_CFG1_ADICLK(ADCx_CFG1_ADIVCLK_BUS_CLOCK_DIV_2) |
-                  ADCx_CFG1_MODE(ADCx_CFG1_MODE_16_BITS);
-
-    /* Perform the sample read, averaging over 32 samples */
-    ADC0->SC3 = ADCx_SC3_AVGE |
-                ADCx_SC3_AVGS(ADCx_SC3_AVGS_AVERAGE_32_SAMPLES);
-
-    /* Begin the read */
-    ADC0->SC1A = ADCx_SC1n_ADCH(PAIR_CFG_ADC_NUM);
-
-    /* Wait for sample to finish */
-    while (!(ADC0->SC1A & ADCx_SC1n_COCO))
-      ;
-
-    resistance = ADC0->RA;
-
-    /* Figure out which threshold it falls into */
-    resistance_min = resistance - (PALAWAN_CFG_RESISTANCE_THRESH / 2);
-    resistance_max = resistance + (PALAWAN_CFG_RESISTANCE_THRESH / 2);
-
-    if ((resistance_min < PALAWAN_RX_VALUE)
-     && (resistance_max > PALAWAN_RX_VALUE))
-      _model = palawan_rx;
-    else if ((resistance_min < PALAWAN_RX_PAIR_VALUE)
-          && (resistance_max > PALAWAN_RX_PAIR_VALUE))
-      _model = palawan_rx;
-
-    else if ((resistance_min < PALAWAN_TX_VALUE_1)
-          && (resistance_max > PALAWAN_TX_VALUE_1))
-      _model = palawan_tx;
-
-    else if ((resistance_min < PALAWAN_TX_VALUE_2)
-          && (resistance_max > PALAWAN_TX_VALUE_2))
-      _model = palawan_tx;
-
-    else if ((resistance_min < PALAWAN_TX_VALUE_3)
-          && (resistance_max > PALAWAN_TX_VALUE_3))
-      _model = palawan_tx;
-
-    else if ((resistance_min < PALAWAN_TX_VALUE_4)
-          && (resistance_max > PALAWAN_TX_VALUE_4))
-      _model = palawan_tx;
-
-    else if ((resistance_min < PALAWAN_TX_VALUE_1_PAIR)
-          && (resistance_max > PALAWAN_TX_VALUE_1_PAIR))
-      _model = palawan_tx;
-
-    else if ((resistance_min < PALAWAN_TX_VALUE_2_PAIR)
-          && (resistance_max > PALAWAN_TX_VALUE_2_PAIR))
-      _model = palawan_tx;
-
-    else if ((resistance_min < PALAWAN_TX_VALUE_3_PAIR)
-          && (resistance_max > PALAWAN_TX_VALUE_3_PAIR))
-      _model = palawan_tx;
-
-    else if ((resistance_min < PALAWAN_TX_VALUE_4_PAIR)
-          && (resistance_max > PALAWAN_TX_VALUE_4_PAIR))
-      _model = palawan_tx;
-  }
-
-    return _model;
-#endif
+  return boot_token.board_model;
 }
 
 static void radio_reset(void) {
@@ -406,16 +301,9 @@ static void early_init_radio(void) {
    * PORTC, PORTD, and PORTE.*/
   SIM->SCGC5 |= (SIM_SCGC5_PORTA | SIM_SCGC5_PORTB);
 
-  /* Map Reset to a GPIO, which is looped from PTE19 back into
-     the RESET_B_XCVR port.*/
-  if (palawanModel() == palawan_tx) {
-    GPIOA->PDDR |= ((uint32_t) 1 << 4);
-    PORTA->PCR[4] = PORTx_PCRn_MUX(1);
-  }
-  else if (palawanModel() == palawan_rx) {
-    GPIOB->PDDR |= ((uint32_t) 1 << 11);
-    PORTB->PCR[11] = PORTx_PCRn_MUX(1);
-  }
+  /* Map Reset to a GPIO, so we can un-reset the radio. */
+  GPIOA->PDDR |= ((uint32_t) 1 << 4);
+  PORTA->PCR[4] = PORTx_PCRn_MUX(1);
 
   /* Enable SPI clock.*/
   SIM->SCGC4 |= SIM_SCGC4_SPI0;
@@ -482,18 +370,6 @@ static void radio_configure_clko(uint8_t osc_div) {
  *          and before any other initialization.
  */
 void __early_init(void) {
-
-  switch (palawanModel()) {
-    case palawan_tx:
-      break;
-      
-    case palawan_rx:
-      break;
-      
-    default:
-      asm("bkpt #0");
-      break;
-  }
 
   early_init_radio();
   radio_power_cycle();

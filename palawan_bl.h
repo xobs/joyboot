@@ -3,6 +3,20 @@
 
 #define PACKED __attribute__((packed))
 
+// This describes the structure that allows the OS to communicate
+// with the bootloader.  It keeps track of how many times we've
+// tried booting, as well as a magic value that tells us to enter
+// the bootloader instead of booting the app.
+// It also keeps track of the board model.
+struct boot_token
+{
+  uint32_t magic;
+  uint8_t  boot_count;
+  uint8_t  board_model;
+  uint16_t reserved;
+} PACKED;
+__attribute__((section("boot_token"))) extern struct boot_token boot_token;
+
 struct reboot_pkt
 {
   uint8_t reboot_key[7]; // Must be 0x91 0x82 0x73 0x64 0xad 0xef 0xba

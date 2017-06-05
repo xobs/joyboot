@@ -10,13 +10,6 @@ enum bootloader_reason bootloader_reason;
 int updateRx(void);
 int updateTx(void);
 
-struct boot_token
-{
-  uint32_t magic;
-  uint32_t boot_count;
-};
-
-__attribute__((section("boot_token"))) extern struct boot_token boot_token;
 static __attribute__((section(".appvectors"))) uint32_t appVectors[64];
 
 static int test_boot_token(void)
@@ -121,11 +114,13 @@ __attribute__((noreturn)) static void boot_app(void)
   SCB->VTOR = (uint32_t)&appVectors[0];
 
   // Switch the clock mode from FEE back to FEI
-  MCG->C1 =                /* Clear the IREFS bit to switch to the external reference. */
-      MCG_C1_CLKS_FLLPLL | /* Use FLL for system clock, MCGCLKOUT. */
-      MCG_C1_IRCLKEN |     /* Enable the internal reference clock. */
-      MCG_C1_IREFS;        /* Use the internal reference clock. */
-  MCG->C6 = 0;             /* PLLS=0: Select FLL as MCG source, not PLL */
+  if (palawanModel() == palawan_rx) {
+    MCG->C1 =                /* Clear the IREFS bit to switch to the external reference. */
+        MCG_C1_CLKS_FLLPLL | /* Use FLL for system clock, MCGCLKOUT. */
+        MCG_C1_IRCLKEN |     /* Enable the internal reference clock. */
+        MCG_C1_IREFS;        /* Use the internal reference clock. */
+    MCG->C6 = 0;             /* PLLS=0: Select FLL as MCG source, not PLL */
+  }
 
   // Refresh watchdog right before launching app
   watchdog_refresh();
@@ -151,7 +146,6 @@ __attribute__((noreturn)) void bootloader_main(void)
 
   if (should_enter_bootloader())
   {
-    asm("bkpt #254");
     boot_token.magic = 0;
     boot_token.boot_count = 0;
 
