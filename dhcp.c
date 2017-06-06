@@ -4,7 +4,7 @@
 
 struct dhcp_request {
   uint8_t addr;
-  long long uid;
+  uint64_t uid;
 } __attribute__((packed));
 
 static long long get_uid(void) {
