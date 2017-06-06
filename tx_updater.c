@@ -93,17 +93,30 @@ static int get_one_page(KRadioDevice *radio, uint8_t data[1024], int pagenum) {
   return 0;
 }
 
+static void configure_pins(void)
+{
+  /* LED */
+  PORTB->PCR[1] = (1 << 8) | (1 << 2);
+  FGPIOB->PDDR |= (1 << 1);
+  FGPIOB->PCOR = (1 << 1);
+
+  /* DIO0 */
+  PORTA->PCR[8] = (1 << 8) | (1 << 2);
+  FGPIOA->PDDR &= ~(1 << 8);
+
+  /* DIO1 */
+  PORTB->PCR[2] = (1 << 8) | (1 << 2);
+  FGPIOB->PDDR &= ~(1 << 2);
+}
+
 int updateTx(void) {
 
   int pagenum;
-
-  /* PTC4 goes high when a packet is available */
-  PORTC->PCR[4] = PORTx_PCRn_MUX(1);
-  GPIOC->PDDR &= ~((uint32_t) 1 << 4);
+  configure_pins();
 
   radioStart(radioDevice);
 
-  while (dhcpRequestAddress(1000) < 0)
+  while (dhcpRequestAddress(10) < 0)
     ;
 
   radioSetHandler(radioDevice, REQUEST_FIRMWARE_DATA, prot_get_firmware);

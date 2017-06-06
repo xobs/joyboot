@@ -148,6 +148,8 @@ __attribute__((noreturn)) void bootloader_main(void)
   {
     boot_token.magic = 0;
     boot_token.boot_count = 0;
+    spiInit();
+    radioInit();
 
     if (palawanModel() == palawan_rx)
       /* Start USB */

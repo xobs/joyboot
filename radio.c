@@ -6,6 +6,7 @@
 #include "kl17.h"
 #include "radio.h"
 #include "TransceiverReg.h"
+#include "spi.h"
 
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(x) ((sizeof(x)) / (*x))
@@ -59,7 +60,6 @@ typedef struct _PacketHandler {
 /* Kinetis Radio definition */
 typedef struct _KRadioDevice {
   uint16_t                bit_rate;
-  uint16_t                fdev;
   uint32_t                channel;
   uint8_t                 rx_buf[RADIO_BUFFER_SIZE];
   uint32_t                rx_buf_end;
@@ -98,7 +98,7 @@ static uint8_t const default_registers[] = {
 
   /* Radio RF frequency initialization @0x07-0x09*/
   /*Default Frequencies*/
-#define DEFAULT_FRF_915
+#define DEFAULT_FRF_434
 
 #ifdef DEFAULT_FRF_915
   RADIO_FrfMsb, FrfMsb_915,
@@ -106,7 +106,7 @@ static uint8_t const default_registers[] = {
   RADIO_FrfLsb, FrfLsb_915,
 #endif
 
-#ifdef DEFAULT_FRF_868  
+#ifdef DEFAULT_FRF_868
   RADIO_FrfMsb, FrfMsb_868,
   RADIO_FrfMid, FrfMid_868,
   RADIO_FrfLsb, FrfLsb_868,
@@ -118,13 +118,13 @@ static uint8_t const default_registers[] = {
   RADIO_FrfLsb, FrfLsb_865,
 #endif
 
-#ifdef DEFAULT_FRF_470  
+#ifdef DEFAULT_FRF_470
   RADIO_FrfMsb, FrfMsb_470,
   RADIO_FrfMid, FrfMid_470,
   RADIO_FrfLsb, FrfLsb_470,
 #endif
 
-#ifdef DEFAULT_FRF_434  
+#ifdef DEFAULT_FRF_434
   RADIO_FrfMsb, FrfMsb_434,
   RADIO_FrfMid, FrfMid_434,
   RADIO_FrfLsb, FrfLsb_434,
@@ -192,22 +192,21 @@ static uint8_t const default_registers[] = {
   RADIO_Temp1, REG_TEMP1_START,
 };
 
-void spi_xmit_byte_sync(uint8_t byte);
-uint8_t spi_recv_byte_sync(void);
-void spi_assert_cs(void);
-void spi_deassert_cs(void);
-void spi_read_status(void);
-
 static void spiSend(void *ignored, int count, const void *data) {
   (void)ignored;
   int i;
   const uint8_t *bytes = data;
 
   for (i = 0; i < count; i++)
-    spi_xmit_byte_sync(bytes[i]);
+    spiXmitByteSync(bytes[i]);
 
   /* Sync byte */
-  spi_xmit_byte_sync(0xff);
+  //spiXmitByteSync(0xff);
+}
+
+static void spiSync(void *ignored) {
+  (void)ignored;
+  spiXmitByteSync(0xff0);
 }
 
 static void spiReceive(void *ignored, int count, void *data) {
@@ -217,17 +216,17 @@ static void spiReceive(void *ignored, int count, void *data) {
   uint8_t *bytes = data;
 
   for (i = 0; i < count; i++)
-    bytes[i] = spi_recv_byte_sync();
+    bytes[i] = spiRecvByteSync();
 }
 
 static void radio_select(KRadioDevice *radio) {
-
-  spi_assert_cs();
+  (void)radio;
+  spiAssertCs();
 }
 
 static void radio_unselect(KRadioDevice *radio) {
-
-  spi_deassert_cs();
+  (void)radio;
+  spiDeassertCs();
 }
 
 static void radio_set(KRadioDevice *radio, uint8_t addr, uint8_t val) {
@@ -245,12 +244,13 @@ static uint8_t radio_get(KRadioDevice *radio, uint8_t addr) {
 
   radio_select(radio);
   spiSend(NULL, 1, &addr);
+  spiSync(NULL);
   spiReceive(NULL, 1, &val);
   radio_unselect(radio);
   return val;
 }
 
-static void radio_set_bit_rate(KRadioDevice *radio, uint32_t rate) {
+void radioPhySetBitRate(KRadioDevice *radio, uint32_t rate) {
 
   rate = RADIO_XTAL_FREQUENCY / rate;
   radio_set(radio, RADIO_BitrateMsb, rate >> 8);
@@ -259,24 +259,57 @@ static void radio_set_bit_rate(KRadioDevice *radio, uint32_t rate) {
 
 static void radio_phy_update_modulation_parameters(KRadioDevice *radio) {
 
-  /* Radio frequency deviation initialization @0x05-0x06*/
-  radio_set(radio, RADIO_FdevMsb, radio->fdev >> 8);
-  radio_set(radio, RADIO_FdevLsb, radio->fdev);
-
-  /* Radio channel filter bandwidth initialization @0x19*/
-  radio_set(radio, RADIO_RxBw, DccFreq_2 | RxBw_250000);
+ /* Radio channel filter bandwidth initialization @0x19*/
+  radio_set(radio, RADIO_RxBw, DccFreq_3 | RxBw_83300);
 
   /* Radio channel filter bandwidth for AFC operation initialization @0x1A*/
-  radio_set(radio, RADIO_AfcBw, DccFreq_2 | RxBw_250000);
+  radio_set(radio, RADIO_AfcBw, DccFreq_3 | RxBw_83300);
 }
 
-static void radio_phy_update_rf_frequency(KRadioDevice *radio) {
+void radioPhySetRfDeviation(KRadioDevice *radio, uint32_t fdev)
+{
+  /* Calculation->  Frf = Foperate/Fstep
+   *                Fstep = (Fxosc / 2**19)
+   *                (Fstep = 61.03515625; for a 32Mhz FXOSC)
+   *                Fstep * 256 = 15625.0
+   */
+  const uint32_t Fstep_32 = 15625; /* Fstep at 32 MHz times 256 */
 
-  uint32_t channel_frequency;
+  fdev *= 256;
+  fdev /= Fstep_32;
+
+  radio_set(radio, RADIO_FdevMsb, fdev >> 8);
+  radio_set(radio, RADIO_FdevLsb, fdev);
+}
+
+uint32_t radioPhyRfDeviation(KRadioDevice *radio)
+{
+  const uint32_t Fstep_32 = 15625; /* Fstep at 32 MHz times 256 */
+  uint32_t fdev;
+
+  fdev  = (radio_get(radio, RADIO_FdevMsb) << 8) & 0x3f00;
+  fdev |= (radio_get(radio, RADIO_FdevLsb)) & 0xff;;
+  fdev *= Fstep_32;
+  fdev /= 256;
+
+  return fdev;
+}
+
+void radioPhyUpdateRfFrequency(KRadioDevice *radio, uint32_t freq) {
+
+ uint32_t channel_frequency;
 
   /* Calculation->  Frf = Foperate/Fstep
+   *                Fstep = (Fxosc / 2**19)
    *                (Fstep = 61.03515625; for a 32Mhz FXOSC)
+   *                Fstep * 256 = 15625.0
    */
+  const uint32_t Fstep_32 = 15625; /* Fstep at 32 MHz times 256 */
+  uint32_t Frf = freq;
+
+#warning "Verify this works"
+  Frf /= Fstep_32;
+  Frf *= 256;
 
   /* This value corresponds to a channel spacing of 1 MHz.*/
   channel_frequency = radio->channel * 0x4000;
@@ -284,7 +317,7 @@ static void radio_phy_update_rf_frequency(KRadioDevice *radio) {
   /* This value corresponds to a Operating Frequency of 902,500,000
    * Value for Channel0 (902.500 MHz)
    */
-  channel_frequency += 14786560;
+  channel_frequency += Frf;
 
   radio_set(radio, RADIO_FrfMsb, channel_frequency >> 16);
   radio_set(radio, RADIO_FrfMid, channel_frequency >> 8);
@@ -344,7 +377,7 @@ static void radio_set_modulation(KRadioDevice *radio,
 void radio_set_encoding(KRadioDevice *radio, enum encoding_type encoding) {
 
   uint8_t reg;
-  
+
   radio->encoding = encoding;
   reg = radio_get(radio, RADIO_PacketConfig1);
   reg &= ~PacketConfig1_DcFree_Mask;
@@ -372,7 +405,8 @@ void radioUnloadPacket(KRadioDevice *radio) {
   radio_select(radio);
   reg = RADIO_Fifo;
   spiSend(NULL, 1, &reg);
-
+  spiSync(NULL);
+  
   /* Read the "length" byte */
   spiReceive(NULL, sizeof(pkt), &pkt);
 
@@ -409,7 +443,7 @@ void radioUnloadPacket(KRadioDevice *radio) {
 
 void radioPoll(KRadioDevice *radio) {
 
-  if (!(GPIOC->PDIR & (1 << 4)))
+  if (!(GPIOB->PDIR & (1 << 2)))
     return;
 
   radioUnloadPacket(radio);
@@ -431,19 +465,21 @@ void radioStart(KRadioDevice *radio) {
     radio_set(radio, cmd, dat);
   }
 
-  radio->fdev = Fdev_170000;
   radio_phy_update_modulation_parameters(radio);
-  radio_set_bit_rate(radio, 50000);
+  //radioPhySetBitRate(radio, 50000);
+  //radioPhySetRfDeviation(radio, 26370);
+  //radioPhySetRfDeviation(radio, 40625/2);
+  //radioPhySetBitRate(radio, 40625);
 
   radio->channel = 0;
-  radio_phy_update_rf_frequency(radio);
+  //radioPhyUpdateRfFrequency(radio, 433923000);
 
   radio_set_preamble_length(radio, 3);
 
   radio_set_output_power_dbm(radio, 13); /* Max output with PA0 is 13 dBm */
 
   radio_set_encoding(radio, encoding_whitening);
-  radio_set_modulation(radio, modulation_fsk_gaussian_bt_0p3);
+  radio_set_modulation(radio, modulation_fsk_no_shaping);
   radio_set_packet_mode(radio);
   radio_set_broadcast_address(radio, 255);
   radio_set_node_address(radio, 1);
@@ -508,6 +544,7 @@ int radioDump(KRadioDevice *radio, uint8_t addr, void *bfr, int count) {
 
   radio_select(radio);
   spiSend(NULL, 1, &addr);
+  spiSync(NULL);
   spiReceive(NULL, count, bfr);
   radio_unselect(radio);
 
@@ -525,6 +562,7 @@ int radioTemperature(KRadioDevice *radio) {
 
     radio_select(radio);
     spiSend(NULL, 1, buf);
+    spiSync(NULL);
     spiReceive(NULL, 2, buf);
     radio_unselect(radio);
   }
@@ -569,7 +607,7 @@ void radioSetAddress(KRadioDevice *radio, uint8_t addr) {
 }
 
 uint8_t radioAddress(KRadioDevice *radio) {
-  
+
   return radio->address;
 }
 
@@ -615,6 +653,9 @@ void radioSend(KRadioDevice *radio,
   spiSend(NULL, bytes, payload);
   radio_unselect(radio);
 
+  /* Wait for DIO0 to go high, indicating the transmission has finished */
+  while (!(FGPIOA->PDIR & (1 << 8)))
+    ;
   /* Wait for the transmission to complete (will be unlocked in IRQ) */
 //  osalSysLock();
 //  (void) osalThreadSuspendS(&radio->thread);

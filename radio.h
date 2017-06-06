@@ -29,6 +29,7 @@ enum radio_protocols {
 
 extern KRadioDevice KRADIO1;
 
+void radioInit(void);
 void radioStart(KRadioDevice *radio);
 void radioStop(KRadioDevice *radio);
 void radioPoll(KRadioDevice *radio);
