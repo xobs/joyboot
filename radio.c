@@ -89,12 +89,12 @@ static uint8_t const default_registers[] = {
   RADIO_DataModul, DataModul_DataMode_Packet | DataModul_Modulation_Fsk | DataModul_ModulationShaping_BT_05,
 
   /* Radio bit rate initialization @0x03-0x04*/
-  RADIO_BitrateMsb, BitrateMsb_55555,
-  RADIO_BitrateLsb, BitrateMsb_55555,
+  RADIO_BitrateMsb, BitrateMsb_50000,
+  RADIO_BitrateLsb, BitrateLsb_50000,
 
   /* Radio frequency deviation initialization @0x05-0x06*/
-  RADIO_FdevMsb, FdevMsb_50000,
-  RADIO_FdevLsb, FdevLsb_50000,
+  RADIO_FdevMsb, FdevMsb_25000,
+  RADIO_FdevLsb, FdevLsb_25000,
 
   /* Radio RF frequency initialization @0x07-0x09*/
   /*Default Frequencies*/
@@ -143,28 +143,32 @@ static uint8_t const default_registers[] = {
 #endif
 
   /* Radio RegAfcCtrl initialization @0x0B*/
-  RADIO_AfcCtrl, AfcCtrl_AfcLowBeta_Off ,
+  RADIO_AfcCtrl, AfcCtrl_AfcLowBeta_Off,
 
   /* Radio output power initialization @0x11*/
-  RADIO_PaLevel, PaLevel_Pa0_On | PaLevel_Pa1_Off | PaLevel_Pa2_Off | 0x1F,
+  //RADIO_PaLevel, PaLevel_Pa0_On | PaLevel_Pa1_Off | PaLevel_Pa2_Off | 0x1F,
+  RADIO_PaLevel, 0x9F,
+  RADIO_Ocp, 0x1C,
+  RADIO_RegTestPa1, 0x55,
+  RADIO_RegTestPa2, 0x70,
 
   /* Radio Rise/Fall time of ramp up/down in FSK initialization @0x12*/
-  RADIO_PaRamp, PaRamp_40,
+  RADIO_PaRamp, PaRamp_31,
 
   /* Radio overload current protection for PA initialization 0x13*/
-  RADIO_Ocp, Ocp_Ocp_On | 0x0C,
+  //RADIO_Ocp, Ocp_Ocp_On | 0x0C,
 
   /* Radio LNA gain and input impedance initialization @0x18*/
-  RADIO_Lna, Lna_LnaZin_50 | Lna_LnaGain_Agc,// Lna_LnaZin_200 | 0x08,
+  RADIO_Lna, Lna_LnaZin_50 | Lna_LnaGain_Agc, //Lna_LnaZin_200 | 0x08,
 
   /* Radio channel filter bandwidth initialization @0x19*/
-  RADIO_RxBw, DccFreq_2 | RxBwMant_0 | RxBwExp_2,
+  RADIO_RxBw, DccFreq_7 | RxBw_31300,
 
   /* Radio channel filter bandwidth for AFC operation initialization @0x1A*/
   //RADIO_AfcBw, DccFreq_7 | RxBw_10400,
 
   /* Radio automatic frequency control initialization @0x1E*/
-  //RADIO_AfcFei, AfcFei_AfcAuto_Off | AfcFei_AfcAutoClear_On,
+  RADIO_AfcFei, AfcFei_AfcAuto_Off | AfcFei_AfcAutoClear_On,
 
   /* Radio Rssi threshold initialization @0x29*/
   // RSSIthres = [-174 + NF +10*log(2*RxBw) + DemodSNR] dBm
@@ -188,20 +192,20 @@ static uint8_t const default_registers[] = {
   RADIO_SyncValue2, 0x4E, //SFD value for uncoded with phySUNMRFSKSFD = 0
 
   /* Radio packet mode config */
-  RADIO_PacketConfig1, PacketConfig1_PacketFormat_Variable_Length | PacketConfig1_AddresFiltering_Node_Or_Broadcast | PacketConfig1_Crc_On,
+  RADIO_PacketConfig1, PacketConfig1_PacketFormat_Variable_Length | PacketConfig1_AddresFiltering_Node_Or_Broadcast | PacketConfig1_Crc_On | PacketConfig1_DcFree_Whitening,
   RADIO_PacketConfig2, PacketConfig2_AutoRxRestart_On | PacketConfig2_Aes_Off | 0x10,
 
   /* Radio payload length initialization */
-  RADIO_PayloadLength, 255,  //max length in rx
+  RADIO_PayloadLength, RADIO_FIFO_DEPTH,  //max length in rx
 
-  RADIO_DioMapping1, DIO0_RxPayloadReady | DIO1_TxFifoNotEmpty,
+  RADIO_DioMapping1, DIO0_RxPayloadReady | DIO1_RxFifoNotEmpty,
   RADIO_DioMapping2, 0x07, // turn off clock output
 
   /* Fading margin improvement, recommended by RFM69HW manual */
   RADIO_TestDagc, 0x30,
 
   /* Prep a temperature sample */
-  RADIO_Temp1, REG_TEMP1_START,
+  //RADIO_Temp1, REG_TEMP1_START,
 };
 
 static void spiSend(void *ignored, int count, const void *data) {
@@ -422,7 +426,7 @@ void radioUnloadPacket(KRadioDevice *radio) {
   reg = RADIO_Fifo;
   spiSend(NULL, 1, &reg);
   spiSync(NULL);
-  
+
   /* Read the "length" byte */
   spiReceive(NULL, sizeof(pkt), &pkt);
 
@@ -457,11 +461,12 @@ void radioUnloadPacket(KRadioDevice *radio) {
                              payload);
 }
 
+int rx_packets;
 void radioPoll(KRadioDevice *radio) {
-
-  if (!(GPIOA->PDIR & (1 << 8)))
+  if (!(GPIOB->PDIR & (1 << 2)))
     return;
 
+  rx_packets++;
   radioUnloadPacket(radio);
 }
 
@@ -507,7 +512,7 @@ void radioStart(KRadioDevice *radio) {
     (void)radio_get(radio, RADIO_Fifo);
 
   radio_set(radio, RADIO_TestLna, 0x2D); // put LNA into high sensitivity mode
- 
+
   /* Move into "Rx" mode */
   radio->mode = mode_receiving;
   radio_set(radio, RADIO_OpMode, OpMode_Sequencer_On
@@ -669,6 +674,8 @@ void radioSend(KRadioDevice *radio,
   radio_set(radio, RADIO_OpMode, OpMode_Sequencer_On
                                | OpMode_Listen_Off
                                | OpMode_Transmitter);
+  radio_set(radio, RADIO_PaLevel, 0x7F);
+  radio_set(radio, RADIO_Ocp, 0x0F);
 
   /* Transmit the packet as soon as the first byte enters the FIFO */
   radio_set(radio, RADIO_FifoThresh, 0x80 | (pkt.length - 1));
@@ -697,6 +704,11 @@ void radioSend(KRadioDevice *radio,
 //  osalSysLock();
 //  (void) osalThreadSuspendS(&radio->thread);
 //  osalSysUnlock();
+  // turn off high power PA settings to prevent Rx damage (done in either boost or regular case)
+  radio_set(radio, RADIO_PaLevel, 0x9F);
+  radio_set(radio, RADIO_Ocp, 0x1C);
+  radio_set(radio, RADIO_RegTestPa1, 0x55);
+  radio_set(radio, RADIO_RegTestPa2, 0x70);
 
   /* Move back into "Rx" mode */
   radio->mode = mode_receiving;
