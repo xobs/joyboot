@@ -106,7 +106,9 @@ void kl02_clk_init(void) {
      crystal selected by C2[EREFS0] has been initialized. */
   int tries = 0;
   while ((MCG->S & MCG_S_OSCINIT0) == 0) {
-    if (tries++ > 10000) {
+    /* If we can't initialize the crystal, it's because it doesn't
+       exist, because we're actually a Tx board. */
+    if (tries++ > 1000000) {
       boot_token.board_model = palawan_tx;
       MCG->C1 =                /* Clear the IREFS bit to switch to the external reference. */
           MCG_C1_CLKS_FLLPLL | /* Use FLL for system clock, MCGCLKOUT. */
@@ -291,52 +293,6 @@ static int radio_power_cycle(void) {
 }
 
 /**
- * @brief   Set up mux ports, enable SPI, and set up GPIO.
- * @details The MCU communicates to the radio via SPI and a few GPIO lines.
- *          Set up the pinmux for these GPIO lines, and set up SPI.
- */
-static void early_init_radio(void) {
-
-  /* Enable Reset GPIO and SPI PORT clocks by unblocking
-   * PORTC, PORTD, and PORTE.*/
-  SIM->SCGC5 |= (SIM_SCGC5_PORTA | SIM_SCGC5_PORTB);
-
-  /* Map Reset to a GPIO, so we can un-reset the radio. */
-  GPIOA->PDDR |= ((uint32_t) 1 << 4);
-  PORTA->PCR[4] = PORTx_PCRn_MUX(1);
-
-  /* Enable SPI clock.*/
-  SIM->SCGC4 |= SIM_SCGC4_SPI0;
-
-  /* Mux PTA5 as a GPIO, since it's used for Chip Select.*/
-  GPIOA->PDDR |= ((uint32_t) 1 << 5);
-  PORTA->PCR[5] = PORTx_PCRn_MUX(1);
-
-  /* Mux PTB0 as SCK */
-  PORTB->PCR[0] = PORTx_PCRn_MUX(3);
-
-  /* Mux PTA6 as MISO */
-  PORTA->PCR[6] = PORTx_PCRn_MUX(3);
-
-  /* Mux PTA7 as MOSI */
-  PORTA->PCR[7] = PORTx_PCRn_MUX(3);
-
-  /* Keep the radio in reset.*/
-  radio_reset();
-
-  /* Initialize the SPI peripheral default values.*/
-  SPI0->C1 = 0;
-  SPI0->C2 = 0;
-  SPI0->BR = 0;
-
-  /* Enable SPI system, and run as a Master.*/
-  SPI0->C1 |= (SPIx_C1_SPE | SPIx_C1_MSTR);
-
-  spi_read_status();
-  spi_deassert_cs();
-}
-
-/**
  * @brief   Configure the radio to output a given clock frequency
  *
  * @param[in] osc_div   a factor of division, of the form 2^n
@@ -369,9 +325,12 @@ static void radio_configure_clko(uint8_t osc_div) {
  * @details This initialization must be performed just after stack setup
  *          and before any other initialization.
  */
-void __early_init(void) {
+extern void earlyInitRadio(void);
+extern void spiInit(void);
 
-  early_init_radio();
+void __early_init(void) {
+  spiInit();
+  earlyInitRadio();
   radio_power_cycle();
 
   /* 32Mhz/4 = 8 MHz CLKOUT.*/

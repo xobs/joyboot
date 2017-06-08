@@ -115,7 +115,8 @@ int updateTx(void) {
   configure_pins();
 
   radioStart(radioDevice);
-
+radioDumpFifo();
+radioDumpData(1, 2);
   while (dhcpRequestAddress(10) < 0)
     ;
 

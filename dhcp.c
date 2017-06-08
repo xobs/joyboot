@@ -54,7 +54,7 @@ int dhcpRequestAddress(int timeout_ms) {
   while (dhcp_requesting && (ms < timeout_ms)) {
 		radioPoll(radioDevice);
 		int i;
-		for (i = 0; i < 17000; i++)
+		for (i = 0; i < 5000; i++)
 			asm("nop");
     ms++;
   }

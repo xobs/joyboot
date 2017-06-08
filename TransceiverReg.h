@@ -217,7 +217,7 @@
 /*Calculations*/
 /******CMA comments*********
 FRF calculation
-* Frf = Fstep × Frf(23;0)
+* Frf = Fstep ï¿½ Frf(23;0)
 
 Frf(23;0)=Frf/Fstep
 ****************************
@@ -251,6 +251,10 @@ Fsteps corresponding values:
 #define FrfMid_434                               0x7F  // Default
 #define FrfLsb_434                               0xFA  // Default
 
+#define FrfMsb_433                               0x6C
+#define FrfMid_433                               0x40
+#define FrfLsb_433                               0x00
+
 /*Japan default 920MHz*/ /*30MHz CLK, Fstep=57.2204*/                           /*920.6 MHz*/
 #define FrfMsb_920                               0xF5  // Default
 #define FrfMid_920                               0x7E  // Default
@@ -274,6 +278,9 @@ Fsteps corresponding values:
 #define BitrateMsb_50000  0x02
 #define BitrateLsb_50000  0x80
 
+#define BitrateMsb_55555  0x02
+#define BitrateLsb_55555  0x40
+
 #define BitrateMsb_100000 0x01
 #define BitrateLsb_100000 0x40
 
@@ -283,9 +290,10 @@ Fsteps corresponding values:
 #define BitrateMsb_200000 0x00
 #define BitrateLsb_200000 0xA0
 
-#define Bitrate_4800	  0x1A0B
+#define Bitrate_4800      0x1A0B
 #define Bitrate_38400     0x0341
 #define Bitrate_50000     0x0280
+#define Bitrate_55555     0x0240
 #define Bitrate_100000    0x0140
 #define Bitrate_150000    0x00D5
 #define Bitrate_200000    0x00A0

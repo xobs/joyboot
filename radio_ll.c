@@ -133,7 +133,7 @@ int radioPowerCycle(void)
  * @details The MCU communicates to the radio via SPI and a few GPIO lines.
  *          Set up the pinmux for these GPIO lines, and set up SPI.
  */
-static void early_init_radio(void)
+void earlyInitRadio(void)
 {
 
   /* Enable Reset GPIO and SPI PORT clocks by unblocking
@@ -142,16 +142,8 @@ static void early_init_radio(void)
 
   /* Map Reset to a GPIO, which is looped from PTE19 back into
      the RESET_B_XCVR port.*/
-  if (palawanModel() == palawan_tx)
-  {
-    GPIOB->PDDR |= ((uint32_t)1 << 11);
-    PORTB->PCR[11] = PORTx_PCRn_MUX(1);
-  }
-  else if (palawanModel() == palawan_rx)
-  {
-    GPIOB->PDDR |= ((uint32_t)1 << 11);
-    PORTB->PCR[11] = PORTx_PCRn_MUX(1);
-  }
+  GPIOB->PDDR |= ((uint32_t)1 << 11);
+  PORTB->PCR[11] = PORTx_PCRn_MUX(1);
 
   /* Keep the radio in reset.*/
   radio_reset();
@@ -205,9 +197,8 @@ void radioInit(void)
     break;
   }
 */
-  early_init_radio();
   radioPowerCycle();
 
   /* 32Mhz/4 = 8 MHz CLKOUT.*/
-  radio_configure_clko(RADIO_CLK_DIV1);
+  //radio_configure_clko(RADIO_CLK_DIV1);
 }

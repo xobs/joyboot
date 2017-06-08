@@ -43,21 +43,32 @@ void spiXmitByteSync(uint8_t byte)
  */
 uint8_t spiRecvByteSync(void)
 {
-  /* Send the byte */
-  SPI0->D = 0;
+  /* Wait for the Tx FIFO to clear up */
+  while (!(SPI0->S & SPIx_S_SPTEF))
+    asm("");
+
+  /* Without this read first, the write is ignored */
+  (void)SPI0->S;
+
+  /* Send a dummy byte, to induce a transfer */
+  SPI0->D = 0xff;
 
   /* Wait for the byte to be transmitted */
   while (!(SPI0->S & SPIx_S_SPRF))
     asm("");
 
-  /* Discard the response */
-  return SPI0->D;
+  /* Return the response */
+   uint8_t val = SPI0->D;
+   return val;
 }
 
 void spiInit(void)
 {
   /* Enable SPI clock.*/
   SIM->SCGC4 |= SIM_SCGC4_SPI0;
+
+  /* Enable GPIO pin control. */
+  SIM->SCGC5 |= (SIM_SCGC5_PORTA | SIM_SCGC5_PORTB);
 
   /* Mux PTA5 as a GPIO, since it's used for Chip Select.*/
   GPIOA->PDDR |= ((uint32_t)1 << 5);
