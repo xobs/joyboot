@@ -117,6 +117,32 @@ int updateTx(void) {
   radioStart(radioDevice);
 radioDumpFifo();
 radioDumpData(1, 2);
+
+  int i;
+  int loops = 0;
+  while (1) {
+    uint8_t bfr[32];
+    for (i = 0; i < sizeof(bfr); i++)
+      bfr[i] = i + 'a';
+    loops++;
+    static const char hex_digits[] = "0123456789abcdef";
+    bfr[0] = hex_digits[(loops>>12) & 0xf];
+    bfr[1] = hex_digits[(loops>>8) & 0xf];
+    bfr[2] = hex_digits[(loops>>4) & 0xf];
+    bfr[3] = hex_digits[(loops>>0) & 0xf];
+    bfr[4] = ' ';
+    bfr[31] = '\0';
+    radioSend(radioDevice, 0xff, radio_prot_echo, sizeof(bfr), bfr);
+/*
+    int i;
+    int ms = 0;
+    while (ms < 30000) {
+      for (i = 0; i < 5000; i++)
+        asm("nop");
+      ms++;
+    }
+    */
+  }
   while (dhcpRequestAddress(10) < 0)
     ;
 

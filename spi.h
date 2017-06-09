@@ -4,22 +4,7 @@
 void spiAssertCs(void);
 void spiDeassertCs(void);
 void spiReadStatus(void);
-
-/**
- * @brief   Send a byte and discard the response
- *
- * @notapi
- */
-void spiXmitByteSync(uint8_t byte);
-
-/**
- * @brief   Send a dummy byte and return the response
- *
- * @return              value read from said register
- *
- * @notapi
- */
-uint8_t spiRecvByteSync(void);
+uint8_t spiTransceive(uint8_t byte);
 
 void spiInit(void);
 

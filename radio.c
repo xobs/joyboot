@@ -89,12 +89,12 @@ static uint8_t const default_registers[] = {
   RADIO_DataModul, DataModul_DataMode_Packet | DataModul_Modulation_Fsk | DataModul_ModulationShaping_BT_05,
 
   /* Radio bit rate initialization @0x03-0x04*/
-  RADIO_BitrateMsb, BitrateMsb_55555,
-  RADIO_BitrateLsb, BitrateMsb_55555,
+  //RADIO_BitrateMsb, BitrateMsb_55555,
+  //RADIO_BitrateLsb, BitrateMsb_55555,
 
   /* Radio frequency deviation initialization @0x05-0x06*/
-  RADIO_FdevMsb, FdevMsb_50000,
-  RADIO_FdevLsb, FdevLsb_50000,
+  //RADIO_FdevMsb, FdevMsb_50000,
+  //RADIO_FdevLsb, FdevLsb_50000,
 
   /* Radio RF frequency initialization @0x07-0x09*/
   /*Default Frequencies*/
@@ -143,7 +143,7 @@ static uint8_t const default_registers[] = {
 #endif
 
   /* Radio RegAfcCtrl initialization @0x0B*/
-  RADIO_AfcCtrl, AfcCtrl_AfcLowBeta_Off ,
+  RADIO_AfcCtrl, AfcCtrl_AfcLowBeta_Off,
 
   /* Radio output power initialization @0x11*/
   RADIO_PaLevel, PaLevel_Pa0_On | PaLevel_Pa1_Off | PaLevel_Pa2_Off | 0x1F,
@@ -155,10 +155,11 @@ static uint8_t const default_registers[] = {
   RADIO_Ocp, Ocp_Ocp_On | 0x0C,
 
   /* Radio LNA gain and input impedance initialization @0x18*/
-  RADIO_Lna, Lna_LnaZin_50 | Lna_LnaGain_Agc,// Lna_LnaZin_200 | 0x08,
+  //RADIO_Lna, Lna_LnaZin_50 | Lna_LnaGain_Agc,
+  RADIO_Lna, Lna_LnaZin_200 | 0x08,
 
   /* Radio channel filter bandwidth initialization @0x19*/
-  RADIO_RxBw, DccFreq_2 | RxBwMant_0 | RxBwExp_2,
+  //RADIO_RxBw, DccFreq_2 | RxBwMant_0 | RxBwExp_2,
 
   /* Radio channel filter bandwidth for AFC operation initialization @0x1A*/
   //RADIO_AfcBw, DccFreq_7 | RxBw_10400,
@@ -188,13 +189,13 @@ static uint8_t const default_registers[] = {
   RADIO_SyncValue2, 0x4E, //SFD value for uncoded with phySUNMRFSKSFD = 0
 
   /* Radio packet mode config */
-  RADIO_PacketConfig1, PacketConfig1_PacketFormat_Variable_Length | PacketConfig1_AddresFiltering_Node_Or_Broadcast | PacketConfig1_Crc_On,
+  RADIO_PacketConfig1, PacketConfig1_PacketFormat_Variable_Length | PacketConfig1_AddresFiltering_Node_Or_Broadcast | PacketConfig1_Crc_On | PacketConfig1_DcFree_Whitening,
   RADIO_PacketConfig2, PacketConfig2_AutoRxRestart_On | PacketConfig2_Aes_Off | 0x10,
 
   /* Radio payload length initialization */
   RADIO_PayloadLength, 255,  //max length in rx
 
-  RADIO_DioMapping1, DIO0_RxPayloadReady | DIO1_TxFifoNotEmpty,
+  RADIO_DioMapping1, DIO0_RxCrkOk | DIO1_TxFifoNotEmpty,
   RADIO_DioMapping2, 0x07, // turn off clock output
 
   /* Fading margin improvement, recommended by RFM69HW manual */
@@ -210,15 +211,7 @@ static void spiSend(void *ignored, int count, const void *data) {
   const uint8_t *bytes = data;
 
   for (i = 0; i < count; i++)
-    spiXmitByteSync(bytes[i]);
-
-  /* Sync byte */
-  //spiXmitByteSync(0xff);
-}
-
-static void spiSync(void *ignored) {
-  (void)ignored;
-  spiXmitByteSync(0xff);
+    spiTransceive(bytes[i]);
 }
 
 static void spiReceive(void *ignored, int count, void *data) {
@@ -228,7 +221,7 @@ static void spiReceive(void *ignored, int count, void *data) {
   uint8_t *bytes = data;
 
   for (i = 0; i < count; i++)
-    bytes[i] = spiRecvByteSync();
+    bytes[i] = spiTransceive(0xff);
 }
 
 static void radio_select(KRadioDevice *radio) {
@@ -239,6 +232,29 @@ static void radio_select(KRadioDevice *radio) {
 static void radio_unselect(KRadioDevice *radio) {
   (void)radio;
   spiDeassertCs();
+}
+
+int radioDump(KRadioDevice *radio, uint8_t addr, void *bfr, int count) {
+
+  radio_select(radio);
+  spiSend(NULL, 1, &addr);
+  spiReceive(NULL, count, bfr);
+  radio_unselect(radio);
+
+  return 0;
+}
+
+uint8_t data_backing[64];
+__attribute__((used))
+uint8_t *radioDumpFifo(void) {
+  radioDump(NULL, 0, data_backing, sizeof(data_backing));
+  return data_backing;
+}
+
+__attribute__((used))
+uint8_t *radioDumpData(uint8_t start, uint8_t len) {
+  radioDump(NULL, start, data_backing, len);
+  return data_backing;
 }
 
 static void radio_set(KRadioDevice *radio, uint8_t addr, uint8_t val) {
@@ -253,12 +269,7 @@ static void radio_set(KRadioDevice *radio, uint8_t addr, uint8_t val) {
 static uint8_t radio_get(KRadioDevice *radio, uint8_t addr) {
 
   uint8_t val;
-
-  radio_select(radio);
-  spiSend(NULL, 1, &addr);
-  spiSync(NULL);
-  spiReceive(NULL, 1, &val);
-  radio_unselect(radio);
+  radioDump(radio, addr, &val, 1);
   return val;
 }
 
@@ -421,7 +432,6 @@ void radioUnloadPacket(KRadioDevice *radio) {
   radio_select(radio);
   reg = RADIO_Fifo;
   spiSend(NULL, 1, &reg);
-  spiSync(NULL);
   
   /* Read the "length" byte */
   spiReceive(NULL, sizeof(pkt), &pkt);
@@ -546,44 +556,6 @@ void radioSetDefaultHandler(KRadioDevice *radio,
   radio->default_handler = handler;
 }
 
-uint8_t radioRead(KRadioDevice *radio, uint8_t addr) {
-
-  uint8_t val;
-
-  val = radio_get(radio, addr);
-
-  return val;
-}
-
-void radioWrite(KRadioDevice *radio, uint8_t addr, uint8_t val) {
-
-  radio_set(radio, addr, val);
-}
-
-int radioDump(KRadioDevice *radio, uint8_t addr, void *bfr, int count) {
-
-  radio_select(radio);
-  spiSend(NULL, 1, &addr);
-  spiSync(NULL);
-  spiReceive(NULL, count, bfr);
-  radio_unselect(radio);
-
-  return 0;
-}
-
-uint8_t data_backing[64];
-__attribute__((used))
-uint8_t *radioDumpFifo(void) {
-  radioDump(NULL, 0, data_backing, sizeof(data_backing));
-  return data_backing;
-}
-
-__attribute__((used))
-uint8_t *radioDumpData(uint8_t start, uint8_t len) {
-  radioDump(NULL, start, data_backing, len);
-  return data_backing;
-}
-
 int radioTemperature(KRadioDevice *radio) {
 
   uint8_t buf[2];
@@ -595,7 +567,6 @@ int radioTemperature(KRadioDevice *radio) {
 
     radio_select(radio);
     spiSend(NULL, 1, buf);
-    spiSync(NULL);
     spiReceive(NULL, 2, buf);
     radio_unselect(radio);
   }
@@ -664,6 +635,7 @@ void radioSend(KRadioDevice *radio,
    */
 //  osalDbgAssert(pkt.length < RADIO_FIFO_DEPTH, "Packet is too large");
 
+  radio_set(radio, RADIO_DioMapping1, DIO0_RxCrkOk | DIO1_TxFifoNotEmpty);
   /* Enter transmission mode */
   radio->mode = mode_transmitting;
   radio_set(radio, RADIO_OpMode, OpMode_Sequencer_On
@@ -689,14 +661,12 @@ void radioSend(KRadioDevice *radio,
   /* Load the payload into the Fifo */
   spiSend(NULL, bytes, payload);
 
-  /* Wait for DIO1 to go high, indicating the transmission has finished */
-  while ((FGPIOB->PDIR & (1 << 2)))
-    ;
   radio_unselect(radio);
-  /* Wait for the transmission to complete (will be unlocked in IRQ) */
-//  osalSysLock();
-//  (void) osalThreadSuspendS(&radio->thread);
-//  osalSysUnlock();
+
+  /* Wait for DIO1 to go low, indicating the transmission has finished */
+  radio_set(radio, RADIO_DioMapping1, DIO0_RxCrkOk | DIO1_TxFifoNotEmpty);
+  while (!(FGPIOB->PDIR & (1 << 2)))
+    ;
 
   /* Move back into "Rx" mode */
   radio->mode = mode_receiving;

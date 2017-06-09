@@ -17,49 +17,30 @@ void spiReadStatus(void)
 }
 
 /**
- * @brief   Send a byte and discard the response
+ * @brief   Send one byte and return the response
+ *
+ * @return     value read from remote device
  *
  * @notapi
  */
-void spiXmitByteSync(uint8_t byte)
-{
-  /* Send the byte */
-  SPI0->D = byte;
-
-  /* Wait for the byte to be transmitted */
-  while (!(SPI0->S & SPIx_S_SPTEF))
-    asm("");
-
-  /* Discard the response */
-  (void)SPI0->D;
-}
-
-/**
- * @brief   Send a dummy byte and return the response
- *
- * @return              value read from said register
- *
- * @notapi
- */
-uint8_t spiRecvByteSync(void)
+uint8_t spiTransceive(uint8_t byte)
 {
   /* Wait for the Tx FIFO to clear up */
   while (!(SPI0->S & SPIx_S_SPTEF))
-    asm("");
+    ;
 
   /* Without this read first, the write is ignored */
   (void)SPI0->S;
 
-  /* Send a dummy byte, to induce a transfer */
-  SPI0->D = 0xff;
+  /* Send a the byte byte, which induces a transfer */
+  SPI0->D = byte;
 
   /* Wait for the byte to be transmitted */
   while (!(SPI0->S & SPIx_S_SPRF))
-    asm("");
+    ;
 
   /* Return the response */
-   uint8_t val = SPI0->D;
-   return val;
+   return SPI0->D;
 }
 
 void spiInit(void)

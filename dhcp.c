@@ -48,8 +48,8 @@ int dhcpRequestAddress(int timeout_ms) {
   request.addr = 0;
 
   dhcp_requesting = 1;
-	radioSetHandler(radioDevice, 3, prot_dhcp);
-  radioSend(radioDevice, 0xff, 3, sizeof(request), &request);
+	radioSetHandler(radioDevice, radio_prot_dhcp_response, prot_dhcp);
+  radioSend(radioDevice, 0xff, radio_prot_dhcp_request, sizeof(request), &request);
 
   while (dhcp_requesting && (ms < timeout_ms)) {
 		radioPoll(radioDevice);
