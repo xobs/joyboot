@@ -16,65 +16,12 @@
 
 static void radio_reset(void)
 {
-  if (palawanModel() == palawan_tx)
-    GPIOB->PSOR = (1 << 11);
-  else if (palawanModel() == palawan_rx)
-    GPIOB->PSOR = (1 << 11);
+  GPIOB->PSOR = (1 << 11);
 }
 
 static void radio_enable(void)
 {
-  if (palawanModel() == palawan_tx)
-    GPIOB->PCOR = (1 << 11);
-  else if (palawanModel() == palawan_rx)
-    GPIOB->PCOR = (1 << 11);
-}
-
-/**
- * @brief   Read a value from a specified radio register
- *
- * @param[in] addr      radio register to read from
- * @return              value read from said register
- *
- * @notapi
- */
-uint8_t radioReadRegister(uint8_t addr)
-{
-  uint8_t val;
-
-  spiReadStatus();
-  spiAssertCs();
-
-  spiXmitByteSync(addr);
-  spiRecvByteSync();
-  val = spiRecvByteSync();
-
-  spiDeassertCs();
-
-  return val;
-}
-
-/**
- * @brief   Write a value to a specified radio register
- *
- * @param[in] addr      radio register to write to
- * @param[in] val       value to write to said register
- *
- * @notapi
- */
-void radioWriteRegister(uint8_t addr, uint8_t val)
-{
-
-  spiReadStatus();
-  spiAssertCs();
-  /* Send the address to write */
-  spiXmitByteSync(addr | 0x80);
-
-  /* Send the actual value */
-  spiXmitByteSync(val);
-
-  (void)spiRecvByteSync();
-  spiDeassertCs();
+  GPIOB->PCOR = (1 << 11);
 }
 
 static void early_usleep(int usec)
@@ -104,16 +51,8 @@ static void early_msleep(int msec)
 int radioPowerCycle(void)
 {
   /* Mux the reset GPIO */
-  if (palawanModel() == palawan_tx)
-  {
-    GPIOB->PDDR |= ((uint32_t)1 << 11);
-    PORTB->PCR[11] = PORTx_PCRn_MUX(1);
-  }
-  else if (palawanModel() == palawan_rx)
-  {
-    GPIOB->PDDR |= ((uint32_t)1 << 11);
-    PORTB->PCR[11] = PORTx_PCRn_MUX(1);
-  }
+  GPIOB->PDDR |= ((uint32_t)1 << 11);
+  PORTB->PCR[11] = PORTx_PCRn_MUX(1);
 
   radio_reset();
 
@@ -145,6 +84,17 @@ void earlyInitRadio(void)
   GPIOB->PDDR |= ((uint32_t)1 << 11);
   PORTB->PCR[11] = PORTx_PCRn_MUX(1);
 
+  /* Mux PTA12 as DIO0, to receive packets.
+   * Enable the interrupt, and mux it as a slow slew rate.
+   */
+  PORTA->PCR[12] = PORTx_PCRn_MUX(1) | (1 << 2) | (0x9 << 16);
+  GPIOA->PDDR &= ~(1 << 12);
+
+  /* Mux PTB2 as DIO1, useful for knowing when the FIFO is empty.
+   */
+  PORTB->PCR[2] = PORTx_PCRn_MUX(1) | (1 << 2);
+  GPIOB->PDDR &= ~(1 << 2);
+
   /* Keep the radio in reset.*/
   radio_reset();
 
@@ -152,53 +102,8 @@ void earlyInitRadio(void)
   spiDeassertCs();
 }
 
-/**
- * @brief   Configure the radio to output a given clock frequency
- *
- * @param[in] osc_div   a factor of division, of the form 2^n
- *
- * @notapi
- */
-
-/* This optimization fix causes it to read DIOMAPPING2 three times, and
- * for reasons unknown, this actually causes it to stick.
- * Maybe it's a race condition, I'm not really sure.  But if you don't
- * do the readback afterwards, then the clock gets stuck at 1 MHz rather
- * than 8 MHz, and bad things happen.
- */
-#define DIOVAL2_OPTIMIZATION_FIX
-static void radio_configure_clko(uint8_t osc_div)
-{
-#ifdef DIOVAL2_OPTIMIZATION_FIX
-  uint8_t dioval2 = radioReadRegister(RADIO_REG_DIOMAPPING2);
-  radioWriteRegister(RADIO_REG_DIOMAPPING2, (dioval2 & ~7) | osc_div);
-  dioval2 = radioReadRegister(RADIO_REG_DIOMAPPING2);
-  radioWriteRegister(RADIO_REG_DIOMAPPING2, (dioval2 & ~7) | osc_div);
-  (void)radioReadRegister(RADIO_REG_DIOMAPPING2);
-#else
-  radioWriteRegister(RADIO_REG_DIOMAPPING2,
-                     (radioReadRegister(RADIO_REG_DIOMAPPING2) & ~7) | osc_div);
-#endif
-}
-
 void radioInit(void)
 {
-  /*
-  switch (palawanModel())
-  {
-  case palawan_tx:
-    break;
 
-  case palawan_rx:
-    break;
-
-  default:
-    asm("bkpt #0");
-    break;
-  }
-*/
   radioPowerCycle();
-
-  /* 32Mhz/4 = 8 MHz CLKOUT.*/
-  //radio_configure_clko(RADIO_CLK_DIV1);
 }

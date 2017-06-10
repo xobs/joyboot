@@ -8,10 +8,6 @@
 #include "TransceiverReg.h"
 #include "spi.h"
 
-#ifndef ARRAY_SIZE
-#define ARRAY_SIZE(x) ((sizeof(x)) / (*x))
-#endif
-
 #define REG_TEMP1                 0x4e
 #define REG_TEMP1_START             (1 << 3)
 #define REG_TEMP1_RUNNING           (1 << 2)
@@ -86,15 +82,33 @@ static uint8_t const default_registers[] = {
   RADIO_OpMode, OpMode_Sequencer_On | OpMode_Listen_Off | OpMode_StandBy,
 
   /* Radio Data mode and modulation initialization @0x02*/
-  RADIO_DataModul, DataModul_DataMode_Packet | DataModul_Modulation_Fsk | DataModul_ModulationShaping_BT_05,
+  RADIO_DataModul, DataModul_DataMode_Packet | DataModul_Modulation_Fsk | DataModul_ModulationShaping_NoShaping,
 
   /* Radio bit rate initialization @0x03-0x04*/
-  //RADIO_BitrateMsb, BitrateMsb_55555,
-  //RADIO_BitrateLsb, BitrateMsb_55555,
+  RADIO_BitrateMsb, BitrateMsb_55555,
+  RADIO_BitrateLsb, BitrateLsb_55555,
 
   /* Radio frequency deviation initialization @0x05-0x06*/
-  //RADIO_FdevMsb, FdevMsb_50000,
-  //RADIO_FdevLsb, FdevLsb_50000,
+  RADIO_FdevMsb, FdevMsb_50000,
+  RADIO_FdevLsb, FdevLsb_50000,
+
+  /* Disable AES encryption -- the key keeps its values across resets */
+  RADIO_AesKey1, 0,
+  RADIO_AesKey2, 0,
+  RADIO_AesKey3, 0,
+  RADIO_AesKey4, 0,
+  RADIO_AesKey5, 0,
+  RADIO_AesKey6, 0,
+  RADIO_AesKey7, 0,
+  RADIO_AesKey8, 0,
+  RADIO_AesKey9, 0,
+  RADIO_AesKey10, 0,
+  RADIO_AesKey11, 0,
+  RADIO_AesKey12, 0,
+  RADIO_AesKey13, 0,
+  RADIO_AesKey14, 0,
+  RADIO_AesKey15, 0,
+  RADIO_AesKey16, 0,
 
   /* Radio RF frequency initialization @0x07-0x09*/
   /*Default Frequencies*/
@@ -143,26 +157,29 @@ static uint8_t const default_registers[] = {
 #endif
 
   /* Radio RegAfcCtrl initialization @0x0B*/
-  RADIO_AfcCtrl, AfcCtrl_AfcLowBeta_Off,
+  //RADIO_AfcCtrl, AfcCtrl_AfcLowBeta_Off,
 
   /* Radio output power initialization @0x11*/
   RADIO_PaLevel, PaLevel_Pa0_On | PaLevel_Pa1_Off | PaLevel_Pa2_Off | 0x1F,
+  //RADIO_PaLevel, 0x7F,
 
   /* Radio Rise/Fall time of ramp up/down in FSK initialization @0x12*/
-  RADIO_PaRamp, PaRamp_40,
+  RADIO_PaRamp, PaRamp_500,
 
   /* Radio overload current protection for PA initialization 0x13*/
-  RADIO_Ocp, Ocp_Ocp_On | 0x0C,
+  //RADIO_Ocp, Ocp_Ocp_On | 0x0C,
+  RADIO_Ocp, Ocp_Ocp_Off,
 
   /* Radio LNA gain and input impedance initialization @0x18*/
-  //RADIO_Lna, Lna_LnaZin_50 | Lna_LnaGain_Agc,
-  RADIO_Lna, Lna_LnaZin_200 | 0x08,
+  RADIO_Lna, Lna_LnaZin_50 | Lna_LnaGain_Agc,
+  //RADIO_Lna, Lna_LnaZin_50 | 0x08,
+  //RADIO_Lna, Lna_LnaZin_200 | 0x08,
 
   /* Radio channel filter bandwidth initialization @0x19*/
-  //RADIO_RxBw, DccFreq_2 | RxBwMant_0 | RxBwExp_2,
+  RADIO_RxBw, DccFreq_2 | RxBw_250000,
 
   /* Radio channel filter bandwidth for AFC operation initialization @0x1A*/
-  //RADIO_AfcBw, DccFreq_7 | RxBw_10400,
+  RADIO_AfcBw, DccFreq_2 | RxBw_250000,
 
   /* Radio automatic frequency control initialization @0x1E*/
   //RADIO_AfcFei, AfcFei_AfcAuto_Off | AfcFei_AfcAutoClear_On,
@@ -172,7 +189,8 @@ static uint8_t const default_registers[] = {
   // NF = 7dB
   // DemodSnr = 8dB
   // RxBw depends on frequency bands and profiles
-  RADIO_RssiThresh, 0xe4, // -101 dBm for 333.3 Khz singleside channel filter bandwith
+  //RADIO_RssiThresh, 0xe4, // -101 dBm for 333.3 Khz singleside channel filter bandwith
+  RADIO_RssiThresh, 0xdc, // -101 dBm for 333.3 Khz singleside channel filter bandwith
 
   /* Radio RegTimeoutRxStart initialization @0x2A*/
   /* Radio RegTimeoutRssiThresh initialization @0x2B*/
@@ -185,15 +203,15 @@ static uint8_t const default_registers[] = {
 
   /* Radio sync word control and value initialization @0x2E-0x30*/
   RADIO_SyncConfig, SyncConfig_Sync_On | SyncConfig_FifioFill_ifSyncAddres | SyncConfig_SyncSize_2,
-  RADIO_SyncValue1, 0x90, //SFD value for uncoded with phySUNMRFSKSFD = 0
-  RADIO_SyncValue2, 0x4E, //SFD value for uncoded with phySUNMRFSKSFD = 0
+  RADIO_SyncValue1, 0x2d, //SFD value for uncoded with phySUNMRFSKSFD = 0
+  RADIO_SyncValue2, 0x55, //SFD value for uncoded with phySUNMRFSKSFD = 0
 
   /* Radio packet mode config */
-  RADIO_PacketConfig1, PacketConfig1_PacketFormat_Variable_Length | PacketConfig1_AddresFiltering_Node_Or_Broadcast | PacketConfig1_Crc_On | PacketConfig1_DcFree_Whitening,
+  RADIO_PacketConfig1, PacketConfig1_PacketFormat_Variable_Length /*| PacketConfig1_AddresFiltering_Node_Or_Broadcast*/ | PacketConfig1_Crc_On | PacketConfig1_DcFree_Whitening,
   RADIO_PacketConfig2, PacketConfig2_AutoRxRestart_On | PacketConfig2_Aes_Off | 0x10,
 
   /* Radio payload length initialization */
-  RADIO_PayloadLength, 255,  //max length in rx
+  RADIO_PayloadLength, RADIO_FIFO_DEPTH,  //max length in rx
 
   RADIO_DioMapping1, DIO0_RxCrkOk | DIO1_TxFifoNotEmpty,
   RADIO_DioMapping2, 0x07, // turn off clock output
@@ -204,6 +222,158 @@ static uint8_t const default_registers[] = {
   /* Prep a temperature sample */
   RADIO_Temp1, REG_TEMP1_START,
 };
+
+// These are indexed by the values of ModemConfigChoice
+// Stored in flash (program) memory to save SRAM
+// It is important to keep the modulation index for FSK between 0.5 and 10
+// modulation index = 2 * Fdev / BR
+// Note that I have not had much success with FSK with Fd > ~5
+// You have to construct these by hand, using the data from the RF69 Datasheet :-(
+// or use the SX1231 starter kit software (Ctl-Alt-N to use that without a connected radio)
+// RH_RF69_REG_02_DATAMODUL
+#define RH_RF69_DATAMODUL_DATAMODE                          0x60
+#define RH_RF69_DATAMODUL_DATAMODE_PACKET                   0x00
+#define RH_RF69_DATAMODUL_DATAMODE_CONT_WITH_SYNC           0x40
+#define RH_RF69_DATAMODUL_DATAMODE_CONT_WITHOUT_SYNC        0x60
+#define RH_RF69_DATAMODUL_MODULATIONTYPE                    0x18
+#define RH_RF69_DATAMODUL_MODULATIONTYPE_FSK                0x00
+#define RH_RF69_DATAMODUL_MODULATIONTYPE_OOK                0x08
+#define RH_RF69_DATAMODUL_MODULATIONSHAPING                 0x03
+#define RH_RF69_DATAMODUL_MODULATIONSHAPING_FSK_NONE        0x00
+#define RH_RF69_DATAMODUL_MODULATIONSHAPING_FSK_BT1_0       0x01
+#define RH_RF69_DATAMODUL_MODULATIONSHAPING_FSK_BT0_5       0x02
+#define RH_RF69_DATAMODUL_MODULATIONSHAPING_FSK_BT0_3       0x03
+#define RH_RF69_DATAMODUL_MODULATIONSHAPING_OOK_NONE        0x00
+#define RH_RF69_DATAMODUL_MODULATIONSHAPING_OOK_BR          0x01
+#define RH_RF69_DATAMODUL_MODULATIONSHAPING_OOK_2BR         0x02
+#define CONFIG_FSK (RH_RF69_DATAMODUL_DATAMODE_PACKET | RH_RF69_DATAMODUL_MODULATIONTYPE_FSK | RH_RF69_DATAMODUL_MODULATIONSHAPING_FSK_NONE)
+#define CONFIG_GFSK (RH_RF69_DATAMODUL_DATAMODE_PACKET | RH_RF69_DATAMODUL_MODULATIONTYPE_FSK | RH_RF69_DATAMODUL_MODULATIONSHAPING_FSK_BT1_0)
+#define CONFIG_OOK (RH_RF69_DATAMODUL_DATAMODE_PACKET | RH_RF69_DATAMODUL_MODULATIONTYPE_OOK | RH_RF69_DATAMODUL_MODULATIONSHAPING_OOK_NONE)
+
+// Choices for RH_RF69_REG_37_PACKETCONFIG1:
+// RH_RF69_REG_37_PACKETCONFIG1
+#define RH_RF69_PACKETCONFIG1_PACKETFORMAT_VARIABLE         0x80
+#define RH_RF69_PACKETCONFIG1_DCFREE                        0x60
+#define RH_RF69_PACKETCONFIG1_DCFREE_NONE                   0x00
+#define RH_RF69_PACKETCONFIG1_DCFREE_MANCHESTER             0x20
+#define RH_RF69_PACKETCONFIG1_DCFREE_WHITENING              0x40
+#define RH_RF69_PACKETCONFIG1_DCFREE_RESERVED               0x60
+#define RH_RF69_PACKETCONFIG1_CRC_ON                        0x10
+#define RH_RF69_PACKETCONFIG1_CRCAUTOCLEAROFF               0x08
+#define RH_RF69_PACKETCONFIG1_ADDRESSFILTERING              0x06
+#define RH_RF69_PACKETCONFIG1_ADDRESSFILTERING_NONE         0x00
+#define RH_RF69_PACKETCONFIG1_ADDRESSFILTERING_NODE         0x02
+#define RH_RF69_PACKETCONFIG1_ADDRESSFILTERING_NODE_BC      0x04
+#define RH_RF69_PACKETCONFIG1_ADDRESSFILTERING_RESERVED 0x06
+#define CONFIG_NOWHITE (RH_RF69_PACKETCONFIG1_PACKETFORMAT_VARIABLE | RH_RF69_PACKETCONFIG1_DCFREE_NONE |  RH_RF69_PACKETCONFIG1_CRC_ON | RH_RF69_PACKETCONFIG1_ADDRESSFILTERING_NODE_BC)
+#define CONFIG_WHITE (RH_RF69_PACKETCONFIG1_PACKETFORMAT_VARIABLE | RH_RF69_PACKETCONFIG1_DCFREE_WHITENING |  RH_RF69_PACKETCONFIG1_CRC_ON | RH_RF69_PACKETCONFIG1_ADDRESSFILTERING_NODE_BC)
+#define CONFIG_MANCHESTER (RH_RF69_PACKETCONFIG1_PACKETFORMAT_VARIABLE | RH_RF69_PACKETCONFIG1_DCFREE_MANCHESTER |  RH_RF69_PACKETCONFIG1_CRC_ON | RH_RF69_PACKETCONFIG1_ADDRESSFILTERING_NODE_BC)
+
+struct modem_config
+{
+	uint8_t    reg_02;   ///< Value for register RH_RF69_REG_02_DATAMODUL
+	uint8_t    reg_03;   ///< Value for register RH_RF69_REG_03_BITRATEMSB
+	uint8_t    reg_04;   ///< Value for register RH_RF69_REG_04_BITRATELSB
+	uint8_t    reg_05;   ///< Value for register RH_RF69_REG_05_FDEVMSB
+	uint8_t    reg_06;   ///< Value for register RH_RF69_REG_06_FDEVLSB
+	uint8_t    reg_19;   ///< Value for register RH_RF69_REG_19_RXBW
+	uint8_t    reg_1a;   ///< Value for register RH_RF69_REG_1A_AFCBW
+	uint8_t    reg_37;   ///< Value for register RH_RF69_REG_37_PACKETCONFIG1
+};
+
+
+static const struct modem_config MODEM_CONFIG_TABLE[] =
+{
+    //  02,        03,   04,   05,   06,   19,   1a,  37
+    // FSK, No Manchester, no shaping, whitening, CRC, no address filtering
+    // AFC BW == RX BW == 2 x bit rate
+    // Low modulation indexes of ~ 1 at slow speeds do not seem to work very well. Choose MI of 2.
+    { CONFIG_FSK,  0x3e, 0x80, 0x00, 0x52, 0xf4, 0xf4, CONFIG_WHITE}, // FSK_Rb2Fd5
+    { CONFIG_FSK,  0x34, 0x15, 0x00, 0x4f, 0xf4, 0xf4, CONFIG_WHITE}, // FSK_Rb2_4Fd4_8
+    { CONFIG_FSK,  0x1a, 0x0b, 0x00, 0x9d, 0xf4, 0xf4, CONFIG_WHITE}, // FSK_Rb4_8Fd9_6
+
+    { CONFIG_FSK,  0x0d, 0x05, 0x01, 0x3b, 0xf4, 0xf4, CONFIG_WHITE}, // FSK_Rb9_6Fd19_2
+    { CONFIG_FSK,  0x06, 0x83, 0x02, 0x75, 0xf3, 0xf3, CONFIG_WHITE}, // FSK_Rb19_2Fd38_4
+    { CONFIG_FSK,  0x03, 0x41, 0x04, 0xea, 0xf2, 0xf2, CONFIG_WHITE}, // FSK_Rb38_4Fd76_8
+
+    { CONFIG_FSK,  0x02, 0x2c, 0x07, 0xae, 0xe2, 0xe2, CONFIG_WHITE}, // FSK_Rb57_6Fd120
+    { CONFIG_FSK,  0x01, 0x00, 0x08, 0x00, 0xe1, 0xe1, CONFIG_WHITE}, // FSK_Rb125Fd125
+    { CONFIG_FSK,  0x00, 0x80, 0x10, 0x00, 0xe0, 0xe0, CONFIG_WHITE}, // FSK_Rb250Fd250
+    { CONFIG_FSK,  0x02, 0x40, 0x03, 0x33, 0x42, 0x42, CONFIG_WHITE}, // FSK_Rb55555Fd50
+
+    //  02,        03,   04,   05,   06,   19,   1a,  37
+    // GFSK (BT=1.0), No Manchester, whitening, CRC, no address filtering
+    // AFC BW == RX BW == 2 x bit rate
+    { CONFIG_GFSK, 0x3e, 0x80, 0x00, 0x52, 0xf4, 0xf5, CONFIG_WHITE}, // GFSK_Rb2Fd5
+    { CONFIG_GFSK, 0x34, 0x15, 0x00, 0x4f, 0xf4, 0xf4, CONFIG_WHITE}, // GFSK_Rb2_4Fd4_8
+    { CONFIG_GFSK, 0x1a, 0x0b, 0x00, 0x9d, 0xf4, 0xf4, CONFIG_WHITE}, // GFSK_Rb4_8Fd9_6
+
+    { CONFIG_GFSK, 0x0d, 0x05, 0x01, 0x3b, 0xf4, 0xf4, CONFIG_WHITE}, // GFSK_Rb9_6Fd19_2
+    { CONFIG_GFSK, 0x06, 0x83, 0x02, 0x75, 0xf3, 0xf3, CONFIG_WHITE}, // GFSK_Rb19_2Fd38_4
+    { CONFIG_GFSK, 0x03, 0x41, 0x04, 0xea, 0xf2, 0xf2, CONFIG_WHITE}, // GFSK_Rb38_4Fd76_8
+
+    { CONFIG_GFSK, 0x02, 0x2c, 0x07, 0xae, 0xe2, 0xe2, CONFIG_WHITE}, // GFSK_Rb57_6Fd120
+    { CONFIG_GFSK, 0x01, 0x00, 0x08, 0x00, 0xe1, 0xe1, CONFIG_WHITE}, // GFSK_Rb125Fd125
+    { CONFIG_GFSK, 0x00, 0x80, 0x10, 0x00, 0xe0, 0xe0, CONFIG_WHITE}, // GFSK_Rb250Fd250
+    { CONFIG_GFSK, 0x02, 0x40, 0x03, 0x33, 0x42, 0x42, CONFIG_WHITE}, // GFSK_Rb55555Fd50
+
+    //  02,        03,   04,   05,   06,   19,   1a,  37
+    // OOK, No Manchester, no shaping, whitening, CRC, no address filtering
+    // with the help of the SX1231 configuration program
+    // AFC BW == RX BW
+    // All OOK configs have the default:
+    // Threshold Type: Peak
+    // Peak Threshold Step: 0.5dB
+    // Peak threshiold dec: ONce per chip
+    // Fixed threshold: 6dB
+    { CONFIG_OOK,  0x7d, 0x00, 0x00, 0x10, 0x88, 0x88, CONFIG_WHITE}, // OOK_Rb1Bw1
+    { CONFIG_OOK,  0x68, 0x2b, 0x00, 0x10, 0xf1, 0xf1, CONFIG_WHITE}, // OOK_Rb1_2Bw75
+    { CONFIG_OOK,  0x34, 0x15, 0x00, 0x10, 0xf5, 0xf5, CONFIG_WHITE}, // OOK_Rb2_4Bw4_8
+    { CONFIG_OOK,  0x1a, 0x0b, 0x00, 0x10, 0xf4, 0xf4, CONFIG_WHITE}, // OOK_Rb4_8Bw9_6
+    { CONFIG_OOK,  0x0d, 0x05, 0x00, 0x10, 0xf3, 0xf3, CONFIG_WHITE}, // OOK_Rb9_6Bw19_2
+    { CONFIG_OOK,  0x06, 0x83, 0x00, 0x10, 0xf2, 0xf2, CONFIG_WHITE}, // OOK_Rb19_2Bw38_4
+    { CONFIG_OOK,  0x03, 0xe8, 0x00, 0x10, 0xe2, 0xe2, CONFIG_WHITE}, // OOK_Rb32Bw64
+
+//    { CONFIG_FSK,  0x68, 0x2b, 0x00, 0x52, 0x55, 0x55, CONFIG_WHITE}, // works: Rb1200 Fd 5000 bw10000, DCC 400
+//    { CONFIG_FSK,  0x0c, 0x80, 0x02, 0x8f, 0x52, 0x52, CONFIG_WHITE}, // works 10/40/80
+//    { CONFIG_FSK,  0x0c, 0x80, 0x02, 0x8f, 0x53, 0x53, CONFIG_WHITE}, // works 10/40/40
+
+};
+
+    typedef enum
+    {
+	FSK_Rb2Fd5 = 0,	    ///< FSK, Whitening, Rb = 2kbs,    Fd = 5kHz
+	FSK_Rb2_4Fd4_8,     ///< FSK, Whitening, Rb = 2.4kbs,  Fd = 4.8kHz
+	FSK_Rb4_8Fd9_6,     ///< FSK, Whitening, Rb = 4.8kbs,  Fd = 9.6kHz
+	FSK_Rb9_6Fd19_2,    ///< FSK, Whitening, Rb = 9.6kbs,  Fd = 19.2kHz
+	FSK_Rb19_2Fd38_4,   ///< FSK, Whitening, Rb = 19.2kbs, Fd = 38.4kHz
+	FSK_Rb38_4Fd76_8,   ///< FSK, Whitening, Rb = 38.4kbs, Fd = 76.8kHz
+	FSK_Rb57_6Fd120,    ///< FSK, Whitening, Rb = 57.6kbs, Fd = 120kHz
+	FSK_Rb125Fd125,     ///< FSK, Whitening, Rb = 125kbs,  Fd = 125kHz
+	FSK_Rb250Fd250,     ///< FSK, Whitening, Rb = 250kbs,  Fd = 250kHz
+	FSK_Rb55555Fd50,    ///< FSK, Whitening, Rb = 55555kbs,Fd = 50kHz for RFM69 lib compatibility
+
+	GFSK_Rb2Fd5,	      ///< GFSK, Whitening, Rb = 2kbs,    Fd = 5kHz
+	GFSK_Rb2_4Fd4_8,    ///< GFSK, Whitening, Rb = 2.4kbs,  Fd = 4.8kHz
+	GFSK_Rb4_8Fd9_6,    ///< GFSK, Whitening, Rb = 4.8kbs,  Fd = 9.6kHz
+	GFSK_Rb9_6Fd19_2,   ///< GFSK, Whitening, Rb = 9.6kbs,  Fd = 19.2kHz
+	GFSK_Rb19_2Fd38_4,  ///< GFSK, Whitening, Rb = 19.2kbs, Fd = 38.4kHz
+	GFSK_Rb38_4Fd76_8,  ///< GFSK, Whitening, Rb = 38.4kbs, Fd = 76.8kHz
+	GFSK_Rb57_6Fd120,   ///< GFSK, Whitening, Rb = 57.6kbs, Fd = 120kHz
+	GFSK_Rb125Fd125,    ///< GFSK, Whitening, Rb = 125kbs,  Fd = 125kHz
+	GFSK_Rb250Fd250,    ///< GFSK, Whitening, Rb = 250kbs,  Fd = 250kHz
+	GFSK_Rb55555Fd50,   ///< GFSK, Whitening, Rb = 55555kbs,Fd = 50kHz
+
+	OOK_Rb1Bw1,         ///< OOK, Whitening, Rb = 1kbs,    Rx Bandwidth = 1kHz.
+	OOK_Rb1_2Bw75,      ///< OOK, Whitening, Rb = 1.2kbs,  Rx Bandwidth = 75kHz.
+	OOK_Rb2_4Bw4_8,     ///< OOK, Whitening, Rb = 2.4kbs,  Rx Bandwidth = 4.8kHz.
+	OOK_Rb4_8Bw9_6,     ///< OOK, Whitening, Rb = 4.8kbs,  Rx Bandwidth = 9.6kHz.
+	OOK_Rb9_6Bw19_2,    ///< OOK, Whitening, Rb = 9.6kbs,  Rx Bandwidth = 19.2kHz.
+	OOK_Rb19_2Bw38_4,   ///< OOK, Whitening, Rb = 19.2kbs, Rx Bandwidth = 38.4kHz.
+	OOK_Rb32Bw64,       ///< OOK, Whitening, Rb = 32kbs,   Rx Bandwidth = 64kHz.
+
+//	Test,
+} ModemConfigChoice;
 
 static void spiSend(void *ignored, int count, const void *data) {
   (void)ignored;
@@ -272,6 +442,7 @@ static uint8_t radio_get(KRadioDevice *radio, uint8_t addr) {
   radioDump(radio, addr, &val, 1);
   return val;
 }
+#if 0
 
 void radioPhySetBitRate(KRadioDevice *radio, uint32_t rate) {
 
@@ -367,7 +538,6 @@ static void radio_set_output_power_dbm(KRadioDevice *radio, int power) {
                                 | ((power + 18) & 0x1f));
 }
 
-#if 0
 static void radio_phy_force_idle(KRadioDevice *radio) {
   //Put transceiver in Stand-By mode
   radio_set(radio, RADIO_OpMode, OpMode_Sequencer_On
@@ -378,7 +548,6 @@ static void radio_phy_force_idle(KRadioDevice *radio) {
   while(radio_get(radio, RADIO_IrqFlags2) & 0x40)
     (void)radio_get(radio, RADIO_Fifo);
 }
-#endif
 
 static void radio_set_packet_mode(KRadioDevice *radio) {
   uint8_t reg;
@@ -411,6 +580,7 @@ void radio_set_encoding(KRadioDevice *radio, enum encoding_type encoding) {
   reg |= (encoding << PacketConfig1_DcFree_Shift);
   radio_set(radio, RADIO_PacketConfig1, reg);
 }
+#endif
 
 static void radio_set_node_address(KRadioDevice *radio, uint8_t address) {
 
@@ -432,7 +602,7 @@ void radioUnloadPacket(KRadioDevice *radio) {
   radio_select(radio);
   reg = RADIO_Fifo;
   spiSend(NULL, 1, &reg);
-  
+
   /* Read the "length" byte */
   spiReceive(NULL, sizeof(pkt), &pkt);
 
@@ -469,14 +639,26 @@ void radioUnloadPacket(KRadioDevice *radio) {
 
 void radioPoll(KRadioDevice *radio) {
 
-  if (!(GPIOA->PDIR & (1 << 8)))
-    return;
-
   radioUnloadPacket(radio);
 }
 
 void radioStop(KRadioDevice *radio) {
   radio_set(radio, RADIO_OpMode, 0x80); // force into sleep mode immediately
+}
+
+static void radio_set_config(KRadioDevice *radio, unsigned int config_num) {
+  if (config_num > ARRAY_SIZE(MODEM_CONFIG_TABLE))
+    return;
+
+  const struct modem_config *config = &MODEM_CONFIG_TABLE[config_num];
+  radio_set(radio, 0x02, config->reg_02);
+  radio_set(radio, 0x03, config->reg_03);
+  radio_set(radio, 0x04, config->reg_04);
+  radio_set(radio, 0x05, config->reg_05);
+  radio_set(radio, 0x06, config->reg_06);
+  radio_set(radio, 0x19, config->reg_19);
+  radio_set(radio, 0x1a, config->reg_1a);
+  radio_set(radio, 0x37, config->reg_37);
 }
 
 void radioStart(KRadioDevice *radio) {
@@ -490,6 +672,8 @@ void radioStart(KRadioDevice *radio) {
 
     radio_set(radio, cmd, dat);
   }
+
+  radio_set_config(radio, FSK_Rb2Fd5);
 
   //radio_phy_update_modulation_parameters(radio);
   //radioPhySetBitRate(radio, 50000);
@@ -517,7 +701,7 @@ void radioStart(KRadioDevice *radio) {
     (void)radio_get(radio, RADIO_Fifo);
 
   radio_set(radio, RADIO_TestLna, 0x2D); // put LNA into high sensitivity mode
- 
+
   /* Move into "Rx" mode */
   radio->mode = mode_receiving;
   radio_set(radio, RADIO_OpMode, OpMode_Sequencer_On
@@ -624,7 +808,8 @@ void radioSend(KRadioDevice *radio,
   RadioPacket pkt;
   uint8_t reg;
 
-  pkt.length = bytes + sizeof(pkt);
+  /* The length byte is not included in the length calculation. */
+  pkt.length = bytes + sizeof(pkt) - 1;
   pkt.src = radio->address;
   pkt.dst = addr;
   pkt.prot = prot;
@@ -635,38 +820,47 @@ void radioSend(KRadioDevice *radio,
    */
 //  osalDbgAssert(pkt.length < RADIO_FIFO_DEPTH, "Packet is too large");
 
-  radio_set(radio, RADIO_DioMapping1, DIO0_RxCrkOk | DIO1_TxFifoNotEmpty);
-  /* Enter transmission mode */
+  //radio_set(radio, RADIO_DioMapping1, DIO0_RxCrkOk | DIO1_TxFifoNotEmpty);
+  radio->mode = mode_standby;
+  /* Go into standby mode, to prevent the radio from receiving while we're loading the fifo */
+  radio_set(radio, RADIO_OpMode, OpMode_Sequencer_On
+                               | OpMode_Listen_Off
+                               | OpMode_StandBy);
+
+  /* Transmit the packet as soon as the first byte enters the FIFO */
+  radio_set(radio, RADIO_FifoThresh, 0x80 | pkt.length);
+
+  radio_select(radio);
+  reg = RADIO_Fifo | 0x80;  spiSend(NULL, 1, &reg);  /* Select the FIFO */
+  spiSend(NULL, sizeof(pkt), &pkt);  /* Load the header into the Fifo */
+  spiSend(NULL, bytes, payload);  /* Load the payload into the Fifo */
+  radio_unselect(radio);
+
+#if 0
+  // set high power modes
+  radio_set(radio, RADIO_PaLevel, 0x7F);
+  radio_set(radio, RADIO_Ocp, 0x0F);
+  radio_set(radio, RADIO_RegTestPa1, 0x5D);
+  radio_set(radio, RADIO_RegTestPa2, 0x7C);
+#endif
+
   radio->mode = mode_transmitting;
+  /* Enter transmission mode, to actually send packets */
   radio_set(radio, RADIO_OpMode, OpMode_Sequencer_On
                                | OpMode_Listen_Off
                                | OpMode_Transmitter);
 
-  /* Transmit the packet as soon as the first byte enters the FIFO */
-  radio_set(radio, RADIO_FifoThresh, 0x80 | (pkt.length - 1));
-
-  /* Wait for the FIFO to be empty */
-  while ((FGPIOB->PDIR & (1 << 2)))
+  /* Wait for the radio to indicate the packet has been sent */
+  while(!(radio_get(radio, RADIO_IrqFlags2) & IrqFlags2_PacketSent))
     ;
 
-  radio_select(radio);
-
-  /* Select the FIFO */
-  reg = RADIO_Fifo | 0x80;
-  spiSend(NULL, 1, &reg);
-
-  /* Load the header into the Fifo */
-  spiSend(NULL, sizeof(pkt), &pkt);
-
-  /* Load the payload into the Fifo */
-  spiSend(NULL, bytes, payload);
-
-  radio_unselect(radio);
-
-  /* Wait for DIO1 to go low, indicating the transmission has finished */
-  radio_set(radio, RADIO_DioMapping1, DIO0_RxCrkOk | DIO1_TxFifoNotEmpty);
-  while (!(FGPIOB->PDIR & (1 << 2)))
-    ;
+#if 0
+  // turn off high power PA settings to prevent Rx damage (done in either boost or regular case)
+  radio_set(radio, RADIO_PaLevel, 0x9F);
+  radio_set(radio, RADIO_Ocp, 0x1C);
+  radio_set(radio, RADIO_RegTestPa1, 0x55);
+  radio_set(radio, RADIO_RegTestPa2, 0x70);
+#endif
 
   /* Move back into "Rx" mode */
   radio->mode = mode_receiving;

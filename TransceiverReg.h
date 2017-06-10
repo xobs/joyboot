@@ -11,7 +11,7 @@
 ************************************************************************************/
 
 
- 
+
 
 #define	RADIO_Fifo	       	   	0x00	/*	FIFO	read/write	access							0x00		*/
 #define	RADIO_OpMode	       	0x01	/*	Operating	modes	of	the	transceiver					0x04		*/
@@ -105,6 +105,8 @@
 #define	RADIO_TestLna	      	0x58	/*	Sensitivity	boost								0x1B		*/
 #define	RADIO_TestAfc	      	0x71	/*	AFC	offset	for	low	modulation	index	AFC			0x00		*/
 #define RADIO_Calib          	0x57  /*  Used in calibration procedure for V2a chip version*/
+#define RADIO_RegTestPa1       0x5A  // only present on RFM69HW/SX1231H
+#define RADIO_RegTestPa2       0x5C // only present on RFM69HW/SX1231H
 #define RADIO_TestPLL_BW            0x5F    /* Added, PLL Bandwidth setting   */ /*JAPAN CFG*/
 #define RADIO_TestDagc       	0x6F  /*  Fading margin improvement. Added for extended PHY. */
 
@@ -122,7 +124,7 @@
 #define ClkOutFxOsc_Div8        (0x03)
 #define ClkOutFxOsc_Div16       (0x04)
 #define ClkOutFxOsc_Div32       (0x05)
-#define ClkOutRC                (0x06)       
+#define ClkOutRC                (0x06)
 #define ClkOutOff               (0x07)
 
 #define DIO0_RxCrkOk          (0x00 << 6)

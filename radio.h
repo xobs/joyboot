@@ -8,6 +8,10 @@
 struct _KRadioDevice;
 typedef struct _KRadioDevice KRadioDevice;
 
+#ifndef ARRAY_SIZE
+#define ARRAY_SIZE(x) ((sizeof(x)) / sizeof(*x))
+#endif
+
 extern KRadioDevice KRADIO1;
 #define radioDevice &KRADIO1
 
